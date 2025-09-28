@@ -1,23 +1,89 @@
-https://dbdiagram.io/d/
+// Use DBML to define your database structure
+// Docs: https://dbml.dbdiagram.io/docs
 
-Table stage_scraping_products {
+Table prices {
+  id serial [primary key]
+  id_supermarket integer
+  id_product integer
+  extraction_date timestamp
+  value int
+  currency varchar
+  
+  indexes {
+    (id_supermarket, id_product, extraction_date) [unique]  // 🔑 unique constraint
+  }
+}
+
+Table discounts {
+  id serial [primary key]
+  id_price integer [ref: > prices.id]
+  unit_value int
+  condition_type varchar
+  min_qty int
+  multiple_qty int
+}
+
+Table supermarkets {
+  id serial [primary key]
+  name varchar
+  logo varchar
+}
+
+Table products {
+  id serial [primary key]
+  name varchar
+  normalized_name varchar
+  quantity decimal(8,2)
+  id_unit integer
+  id_brand integer
+  category varchar
+  variety varchar
+  presentation varchar // pack, bolsa, botella
+  //description_original varchar -> esta info ya estará en la tabla de trazabilidad
+  // de producto, además un producto en esta tabla puede tener diferentes nombres 
+  // en diferentes supermercados
+}
+
+Table units_of_measurement {
+  id serial [primary key]
+  name varchar //kg, unidade, pacote
+  type varchar //opcional peso, cantidad 
+  //description_original varchar -> esta info ya estará en la tabla de trazabilidad
+  // de producto, además un producto en esta tabla puede tener diferentes nombres 
+  // en diferentes supermercados
+}
+
+Table raw_product_data {
+  original_name varchar [primary key]
+  product_url varchar  [primary key]
+  product_id integer
+  extraction_date timestamp
+  market varchar
+}
+
+Table brands{
+  id serial [primary key]
+  name varchar
+  normalized_name varchar
+  is_private_label boolean //indica si la marca es blanca o no
+}
+
+Table stage_scraping_products{
   id bigint [primary key]
   name varchar [not null]
-  market varchar [not null]
+  market varchar
   category varchar
   brand varchar
-  product_url text
+  product_url varchar
   source_id varchar [note: 'product id in the market']
-
   price int [not null]
   quantity decimal(8,2) [note: 'quantity per unit of measure']
   unit_of_measure varchar [note: 'KG, UNIT, LITER, ETC.']  
-
   extraction_url text [note: 'URL where it was scraped']
   extraction_date timestamp [not null]
   currency varchar
-
   created_at timestamp [default: 'now()']
+  is_processed boolean [default: FALSE]
 }
 
 Table stage_discounts {
@@ -38,3 +104,38 @@ Table stage_discounts {
 
   created_at timestamp [default: 'now()']
 }
+
+Ref product_price: prices.id_product > products.id // many-to-one
+Ref supermarket_price: prices.id_supermarket > supermarkets.id // many-to-one
+Ref brand_product: products.id_brand > brands.id
+Ref unit_product: products.id_unit > units_of_measurement.id
+Ref stage_product: stage_scraping_products.id < stage_discounts.id
+Ref raw_product: raw_product_data.product_id < products.id
+// También habrá una tabla que es la que será rellenada con el web scrapping (7 super)
+// y luego con el procesamiento ya se rellenarán esas otras tablas.
+
+// DUDAS:
+// Como pondría los packs de los productos?
+// pack de 4 botellas de 2l
+
+// PROCESAMIENTO
+// Normalización de las unidades
+//    El mismo producto puede estar en ml y otros en litros
+// Normalización de los nombres de los productos
+//    En el mismo supermercado, pueden haber marcas registradas de diferentes maneras,
+//  con espacio al final, sin y con acento --> Fort Atacadista (União , União, Caravelas,
+//  Caravellas)
+
+// ARROZ AGULHINHA TIPO 1 TIO JOÃO
+//   1 KG:
+// - Arroz Agulhinha Tipo 1 TIO JOÃO Pacote 1kg
+// - Arroz Polido Tio João Tipo 1 Com 1kg
+// - Arroz Tipo 1 Tio João 1Kg
+// - Arroz Branco Tio João 1Kg
+// - Arroz Polido Tipo 1 Tio João 1kg
+
+//    2 KG:
+
+//    5 KG:
+// - Arroz Tio João 100% Grãos Nobres 5Kg
+

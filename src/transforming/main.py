@@ -57,11 +57,11 @@ scraped_products_query = """
         SELECT p.*
         FROM stage_scraping_products p
         WHERE p.market = 'tenda'
-        AND length(p.id::text) > 5
+        --AND length(p.id::text) > 5
         AND p.is_processed = false
         --AND p.id = 619600713277767680
         ORDER BY p.source_id DESC
-        LIMIT 10;
+        LIMIT 100;
         """
 scraped_products=client.execute_query(scraped_products_query)
 
@@ -100,52 +100,56 @@ for scraped_product in scraped_products:
     currency = scraped_product["currency"]
     #created_at = scraped_product["created_at"]
 
-## Supermarket   
-    # Checking if the supermarket is in the supermarkets table
-    if market not in supermarkets_created:
-        # Inserting the supermarket in the supermarkets table
-        supermarket_query = """
-            INSERT INTO supermarkets (name)
-            VALUES (%s)
-            RETURNING id;
-            """
-        new_supermarket = client.execute_non_query(supermarket_query, (market,))
-        id_supermarket = new_supermarket[0]["id"]
-
-        # Add to local dictionary to avoid re-insertion
-        supermarkets_created[market] = id_supermarket
-        print(f"Inserted supermarket {market} with id {id_supermarket}.")
-    else:
-        # Get the id of the existing supermarket
-        id_supermarket = supermarkets_created[market]
-        print(f"Supermarket {market} already exists with id {id_supermarket}.")
-
-## Brand
-    # Checking if the brand is in the brands table
-    if normalized_brand not in brands_created:
-        # Inserting the brand in the brands table
-        brand_query = """
-            INSERT INTO brands (name, normalized_name)
-            VALUES (%s, %s)
-            RETURNING id;
-            """
-        new_brand = client.execute_non_query(brand_query, (brand, normalized_brand))
-        id_brand = new_brand[0]["id"]
-
-        # Add to local dictionary to avoid re-insertion
-        brands_created[normalized_brand] = id_brand
-        print(f"Inserted brand {brand} with id {id_brand}.")
-    else:
-        # Get the id of the existing brand
-        id_brand = brands_created[normalized_brand]
-        print(f"Brand {brand} already exists with id {id_brand}.")
-
-## Unit of measurement
-    # Checking if the unit of measurement is in the units_of_measure table PENDING
-
 ## Product
     # Checking if the product_url is in the raw_product_data table
     if product_url not in raw_product_data:
+        print(f"Product_url {product_url} not found in the raw_product_data table.")
+
+    ## Supermarket   
+        # Checking if the supermarket is in the supermarkets table
+        if market not in supermarkets_created:
+            # Inserting the supermarket in the supermarkets table
+            supermarket_query = """
+                INSERT INTO supermarkets (name)
+                VALUES (%s)
+                RETURNING id;
+                """
+            new_supermarket = client.execute_non_query(supermarket_query, (market,))
+            id_supermarket = new_supermarket[0]["id"]
+
+            # Add to local dictionary to avoid re-insertion
+            supermarkets_created[market] = id_supermarket
+            print(f"Inserted supermarket {market} with id {id_supermarket}.")
+        else:
+            # Get the id of the existing supermarket
+            id_supermarket = supermarkets_created[market]
+            print(f"Supermarket {market} already exists with id {id_supermarket}.")
+
+    ## Brand
+        # Checking if the brand is in the brands table
+        if normalized_brand not in brands_created:
+            # Inserting the brand in the brands table
+            brand_query = """
+                INSERT INTO brands (name, normalized_name)
+                VALUES (%s, %s)
+                RETURNING id;
+                """
+            new_brand = client.execute_non_query(brand_query, (brand, normalized_brand))
+            id_brand = new_brand[0]["id"]
+
+            # Add to local dictionary to avoid re-insertion
+            brands_created[normalized_brand] = id_brand
+            print(f"Inserted brand {brand} with id {id_brand}.")
+        else:
+            # Get the id of the existing brand
+            id_brand = brands_created[normalized_brand]
+            print(f"Brand {brand} already exists with id {id_brand}.")
+
+    ## Unit of measurement
+        # Checking if the unit of measurement is in the units_of_measure table PENDING
+
+## Product
+    
         # Checking if the product is already in the products table
         if normalized_name not in products_created:
             # Inserting the product in the products table
@@ -188,6 +192,10 @@ for scraped_product in scraped_products:
         print(f"Price {price} already exists with id_supermarket {id_supermarket}, id_product {id_product} and extraction_date {extraction_date}.")
         # Products in distinct categories at the same supermarket and extraction date
     else:
+        # Defining the currency
+        if currency is None:
+            currency = 'BRL'
+
         # Inserting the price in the prices table
         price_query = """
             INSERT INTO prices (id_supermarket, id_product, extraction_date, value, currency)
@@ -196,6 +204,9 @@ for scraped_product in scraped_products:
             """
         new_price=client.execute_non_query(price_query, (id_supermarket, id_product, extraction_date, price, currency))
         id_price = new_price[0]["id"]
+
+        # Add to local dictionary to avoid re-insertion
+        price_created.add((id_supermarket, id_product, extraction_date))
 
         print(f"Inserted price {price} with id_supermarket {id_supermarket}, id_product {id_product} and extraction_date {extraction_date}.")
 
