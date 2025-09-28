@@ -1,0 +1,17 @@
+{
+  "name": "Biscoito CLUB SOCIAL Original Pacote 144g",
+  "price": 7.39,
+  "category":"Mercearia",
+  "unit_of_measurement":"un",
+  "quantity":1,
+  "discounts": [{
+    "type": "vuon_card",
+    "price": 5.50
+  }],
+  "brand":"Club Social",
+  "product_url": "https://marche.com.br/collections/mercearia/products/biscoito-club-social-original-pacote-144g?store_id=66677604431",
+  "extraction_url": "https://marche.com.br/collections/mercearia/products/biscoito-club-social-original-pacote-144g?store_id=66677604431",
+  "source_id": "66677604431",
+  "market":"Stmarche",
+  "extraction_date":"2025-08-06T16:22:09.645284"
+}

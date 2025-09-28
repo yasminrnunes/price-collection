@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Água Sanitária Qboa 2 Litros",
+    "category": "Limpeza",
+    "brand": "Qboa",
+    "price": 7.99,
+    "unit_of_measurement": "UN",
+    "quantity": 1.0,
+    "product_url": "https://www.deliveryfort.com.br/agua-sanitaria-qboa-2-litros/p",
+    "extraction_url": "https://www.deliveryfort.com.br/api/catalog_system/pub/products/search/agua-sanitaria-qboa-2-litros/p",
+    "source_id": "46957",
+    "market": "fort",
+    "extraction_date": "2025-08-09T18:08:46.010720"
+  },
+  {
+    "name": "Pera Importada",
+    "category": "Hortifruti",
+    "brand": "Outros",
+    "price": 2.0,
+    "unit_of_measurement": "UN",
+    "quantity": 1.0,
+    "product_url": "https://www.deliveryfort.com.br/pera-importada/p",
+    "extraction_url": "https://www.deliveryfort.com.br/api/catalog_system/pub/products/search/pera-importada/p",
+    "source_id": "683590",
+    "market": "fort",
+    "extraction_date": "2025-08-09T18:08:46.010720",
+    "discounts": [
+      {
+        "type": "vuon_card",
+        "price": 1.8
+      }
+    ]
+  }
+]

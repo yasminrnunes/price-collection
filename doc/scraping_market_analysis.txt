@@ -1,0 +1,70 @@
+# Supermercado Carrefour
+## Status: Not started (VPN needed to access)
+## Catalogo online: HTML 
+## Página web: 
+## Marcas blancas: 
+## Descuentos disponibles: 
+## Precios variables: 
+## Botón para avanzar de páginas: 
+## Productos no disponibles: 
+
+# Supermercado Pão de Açucar
+## Status: Scraping not started
+## Catalogo online: HTML --> dynamic o API
+## Página web: https://www.paodeacucar.com/
+## Marcas blancas: -
+## Descuentos disponibles: -40% na 2ª unidade, Leve 3 pague 2, Leve 4 pague 3
+## Precios variables: Hay productos que tiene un tag de precio variable y que el valor está en kg siendo que en el nombre del producto pone que es 1,7 kg (https://www.paodeacucar.com/produto/80812/picanha-bovina-a-vacuo-resfriada-1,7kg)
+## Botón para avanzar de páginas: No hay botón para pasar de página, se avanza solo con el scroll
+## Productos no disponibles: Se enseñan productos no disponibles (tag Sem estoque)
+
+# Supermercado Extra
+## Status: In development (dynamic)
+## Catalogo online: HTML --> dynamic o API
+## Página web: https://www.extramercado.com.br/
+## Marcas blancas: Qualitá
+## Descuentos disponibles: Leve 6 pague 5 (no cambia el precio), -40% na 2ª unidade (pone el precio nuevo por unidad), -50% na 2ª unidade (pone el precio nuevo por unidad)
+## Precios variables: Hay productos que tiene un tag de precio variable y que el valor está en kg siendo que en el nombre del producto pone que es 1,2 kg mientras que hay otros productos que no tiene el precio / kg y parece ser que el valor es de las gramas definidas en el nombre del producto. https://www.extramercado.com.br/produto/67746/batata-1,2kg-(aprox--3-unid) https://www.extramercado.com.br/produto/80528/batata-doce-rosada-500g 
+## Botón para avanzar de páginas: No hay botón para pasar de página, se avanza solo con el scroll
+## Productos no disponibles: Se enseñan productos no disponibles (tag Sem estoque)
+
+# Supermercado Fort Atacadista
+## Status: Tried w/ static request (las páginas de las categorías enseñana los mismos productos de la primera página de cada categoría)
+## Catalogo online: HTML --> dynamic o API
+## Página web: https://www.deliveryfort.com.br/
+## Marcas blancas: Essasim (hay más?)
+## Descuentos disponibles: vuon card
+## Precios variables: Los valores están en las gramas de cada producto y suele tener su valor en kg
+## Botón para avanzar de páginas: Hay botón para pasar de página
+## Productos no disponibles: Se enseñan productos no disponibles (tag Produto indisponível)
+
+# Supermercado Tenda Atacado
+## Status: Not started
+## Catalogo online: HTML --> dynamic o API
+## Página web: https://www.tendaatacado.com.br/
+## Marcas blancas: Select
+## Descuentos disponibles: cartão tenda, valor a partir de 3 unidades, valor a partir de 2 unidades, valor a partir de 6 unidades (se permite más de un tipo de descuento al mismo producto) - siempre son los dos descuentos juntos, variando la cantida
+## Precios variables: Los valores están en las gramas de cada producto y la unidad de venta es unidad. Hay verduras que se vende a unidad, pero hay el precio por kg. En este caso se debe registrar el precio por kg?
+## Botón para avanzar de páginas: Hay botón de mostrar más pero la url no se cambia y hay páginas que se avanza sola con el scroll
+## Productos no disponibles: Se enseñan productos no disponibles (tag Produto indisponível)
+
+# Supermercado St Marche
+## Status: Shared w/ Miriam
+## Catalogo online: HTML --> static
+## Página web: https://marche.com.br/
+## Marcas blancas: St Marche 
+## Descuentos disponibles: cantidad máxima por cpf (está en el nombre del producto)
+## Precios variables: Sin problemas, la unidad de venta depende de cada producto.
+## Botón para avanzar de páginas: Hay botón para cambiar de página y se cambia la url
+## Productos no disponibles: Solo se enseñan productos disponibles
+## Comentario scraping: The product pages that don't exist still return a product >> Keep going through the pages until there is no product URL left that hasn't been added.
+
+# Supermercado Mambo
+## Status: Tried w/ static (la página de categorías tiene menos productos accediendo por scraping en comparación a la página web)
+## Catalogo online: HTML --> dynamic o API 
+## Página web: https://www.mambo.com.br/
+## Marcas blancas: Momento Mambo
+## Descuentos disponibles: 50% off na 2º unidade, leve 3 pague 2
+## Precios variables: Sin problemas, la unidad de venta depende de cada producto.
+## Botón para avanzar de páginas: Hay botón de mostrar más con cambio de url
+## Productos no disponibles: Se enseñan productos no disponibles (tag Produto indisponível)

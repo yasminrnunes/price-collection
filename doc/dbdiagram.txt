@@ -1,0 +1,40 @@
+https://dbdiagram.io/d/
+
+Table stage_scraping_products {
+  id bigint [primary key]
+  name varchar [not null]
+  market varchar [not null]
+  category varchar
+  brand varchar
+  product_url text
+  source_id varchar [note: 'product id in the market']
+
+  price int [not null]
+  quantity decimal(8,2) [note: 'quantity per unit of measure']
+  unit_of_measure varchar [note: 'KG, UNIT, LITER, ETC.']  
+
+  extraction_url text [note: 'URL where it was scraped']
+  extraction_date timestamp [not null]
+  currency varchar
+
+  created_at timestamp [default: 'now()']
+}
+
+Table stage_discounts {
+  id bigint [primary key]
+  product_id bigint [ref: > stage_scraping_products.id, not null]
+  type varchar [not null, note: 'PERCENTAGE_QUANTITY, CARD, WHOLESALE, BUY_X_GET_Y']
+  discounted_price int [not null]
+
+  conditions_text varchar [note: 'human readable conditions']
+
+  // PERCENTAGE_QUANTITY (-40% na 2ª unidade)
+  // WHOLESALE (apartir de 3 unidades)
+  conditions_min_quantity integer [note: 'minimum quantity to apply the discount']
+
+  // BUY_X_GET_Y (2x1, 3x2)
+  conditions_buy_quantity integer [note: 'quantity to buy to apply the discount']
+  conditions_get_quantity integer [note: 'quantity to get to apply the discount']
+
+  created_at timestamp [default: 'now()']
+}
