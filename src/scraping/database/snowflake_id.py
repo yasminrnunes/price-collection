@@ -1,3 +1,7 @@
+"""
+Simplified Snowflake ID generator
+"""
+
 import time
 import threading
 
@@ -81,4 +85,5 @@ _generator = SnowflakeIDGenerator()
 
 
 def generate_id() -> int:
+    """Generate a new unique Snowflake ID"""
     return _generator.generate_id()

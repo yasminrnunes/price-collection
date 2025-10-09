@@ -7,23 +7,20 @@ import re
 from datetime import datetime
 from utils.encoders import encode_text, string_to_decimal
 from utils.http_request import make_request_with_delay
-from utils.html_parser import parse_html
+from utils.parsers import parse_html
 from utils.logger import Logger
 from utils.encoders import price_to_int
-from database.client import DatabaseClient
+from database.sql_client import DatabaseClient
 from database.models.scraping_product import ScrapingProduct
 from database.file_storage import save_scraping_products_to_file
 
-# TODO:
-# St Marche comments:
-## The product pages that don't exist still return a product >> Keep going through the pages until there is no product URL left that hasn't been added.
-## St Marche only displays products that are available.
-## The product price returned not only the amount but also the currency and some letters, like 'R$\xa025,89'.
-## The product brand is not available.
-## The quantity restriction by product is registered in the product name --> Cerveja Pilsen Corona Lata 350ml (máx 24 unidades por cpf)
+# TODO: St Marche comments
+# St Marche only displays products that are available.
+# The product brand is not available.
+# The quantity restriction by product is registered in the product name --> Cerveja Pilsen Corona Lata 350ml (máx 24 unidades por cpf)
 
 EXECUTION_TIME = datetime.now()
-MARKET = "StMarche"
+MARKET = "stMarche"
 LOGGER = Logger(MARKET)
 
 BASE_URL = "https://marche.com.br"
@@ -97,20 +94,8 @@ def _get_all_categories():
     return categories_to_return
 
 
-def _extract_product_data(soup_product, link, category_name, category_url_with_page):
-    """Extract product data from soup and link elements"""
-    product_url = link["href"]
-
-    h4_element = link.find("h4")
-    if h4_element:
-        product_name = encode_text(h4_element.get_text(strip=True))
-        # TODO Map max quantity or do something else
-        # product_name, max_quantity = _extract_max_quantity(product_name)
-    else:
-        raise Exception(
-            "Product name not found in the product page url %s",
-            category_url_with_page,
-        )
+def _extract_product_data(soup_product, category_name, category_url_with_page):
+    """Extract product data from soup_product element"""
 
     def safe_find_text(class_prefix, default="", upper=False):
         """Safely find element and extract text with error handling"""
@@ -125,11 +110,29 @@ def _extract_product_data(soup_product, link, category_name, category_url_with_p
         except (AttributeError, TypeError):
             return default
 
+    product_url = soup_product["href"]
+
+    h4_element = soup_product.find("h4")
+    product_name = encode_text(h4_element.get_text(strip=True))
+
     # Get product price
     price = safe_find_text("_product-card-price-regular") or 0
 
     # Get unit of measurement
     unit_of_measure = safe_find_text("_product-card-price-measurement", upper=True)
+
+    # Get source id
+    source_id = None
+    try:
+        img_tag = soup_product.find("img")
+        if img_tag and "src" in img_tag.attrs:
+            src = img_tag["src"]
+            if "v=" in src:
+                source_id = src.split("v=")[1].split("&")[0]
+    except (IndexError, AttributeError, KeyError, TypeError):
+        LOGGER.warning(
+            f"Error extracting source id from {product_name}, url: {product_url}"
+        )
 
     quantity = None
 
@@ -146,13 +149,16 @@ def _extract_product_data(soup_product, link, category_name, category_url_with_p
         if measurement_text:
             quantity = string_to_decimal(measurement_text)
 
+    # TODO Map max quantity or do something else
+    # product_name, max_quantity = _extract_max_quantity(product_name)
+
     return ScrapingProduct(
         name=product_name,
         category=category_name,
         market=MARKET,
         price=price_to_int(price),
-        # source_id=,
-        # brand=,
+        source_id=source_id,
+        # brand=None,  # Brand not available directly, only in the product name
         quantity=quantity,
         unit_of_measure=unit_of_measure,
         product_url=BASE_URL + product_url,
@@ -197,7 +203,7 @@ def _get_all_products_for_category(category_name: str, category_url: str):
                     processed_product_urls.append(product_url)
 
                     product = _extract_product_data(
-                        soup_product, link, category_name, category_url_with_page
+                        link, category_name, category_url_with_page
                     )
 
                     products_on_page.append(product)
@@ -266,9 +272,7 @@ if __name__ == "__main__":
             active_threads.append(thread)
             all_products.extend(category_products)
 
-    save_scraping_products_to_file(
-        all_products, MARKET, EXECUTION_TIME.isoformat()
-    )
+    save_scraping_products_to_file(all_products, MARKET, EXECUTION_TIME.isoformat())
 
     # wait for all database insertions to complete
     LOGGER.info("Waiting for all database insertions to complete...")

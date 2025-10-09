@@ -1,33 +1,98 @@
 """
 Scraping script for Tenda
 """
+
 from datetime import datetime
+import re
 from typing import List
 import time
-from utils.http_request import make_request_with_delay
+from utils.http_request import make_request_with_delay, make_post_request
 from utils.logger import Logger
 from utils.encoders import price_to_int
 from database.file_storage import save_scraping_products_to_file
 from database.models.scraping_product import ScrapingProduct
-from database.client import DatabaseClient
+from database.sql_client import DatabaseClient
 
 # TODO:
 # - obtener la cantidad y la unidad de medida de los productos
 # - automatizar el proceso de obtener el token
 
 EXECUTION_TIME = datetime.now()
-MARKET = "Tenda"  # https://tendaatacado.com.br
+MARKET = "tenda"  # https://tendaatacado.com.br
 
 URL_API = "https://api.tendaatacado.com.br/api/public/store/category/{category_id}/products?&page={page}&order=relevance"
 URL_CATEGORIES = "https://api.tendaatacado.com.br/api/recommendations/departments"
 
-BEARER_TOKEN = "bbbbdf176d4d1b6585b76c49faed8d1b"
-HEADERS = {
-    "Authorization": f"Bearer {BEARER_TOKEN}",
-    "X-Authorization": f"Bearer {BEARER_TOKEN}",
-}
+URL_GET_ANONYMOUS_CREDENTIALS = (
+    "https://api.tendaatacado.com.br/api/public/anonymous-client"
+)
+URL_GET_ACCESS_TOKEN = "https://api.tendaatacado.com.br/api/public/oauth/access-token?g-recaptcha-response=null"
 
 LOGGER = Logger(MARKET)
+
+# Fallback token in case refresh fails
+FALLBACK_TOKEN = "XXXX"
+
+# Global variable to store the token once obtained
+_AUTH_HEADERS = None
+
+
+def _refresh_token() -> dict:
+    """Refresh access token for Tenda API"""
+    response_get_anonymous_credentials = make_post_request(
+        URL_GET_ANONYMOUS_CREDENTIALS, timeout=5
+    )
+
+    if (
+        response_get_anonymous_credentials is None
+        or response_get_anonymous_credentials.status_code != 201
+    ):
+        LOGGER.error(
+            f"Failed to get anonymous credentials, status code: {response_get_anonymous_credentials.status_code}"
+        )
+        return None
+
+    data = {
+        "username": response_get_anonymous_credentials.json()["user"],
+        "password": response_get_anonymous_credentials.json()["password"],
+        "client_id": "79ggnm96dwlojly6mqulzval0h4b94gc",
+        "client_secret": "ix2tid1exrsvc8u4ta2tys1p495sa3sk3h6o6fgp0kdpu7xgmb595b8525m9rfvj",
+        "grant_type": "password",
+    }
+
+    response = make_post_request(URL_GET_ACCESS_TOKEN, data=data, timeout=5)
+
+    if response is None or response.status_code != 200:
+        LOGGER.error(f"Failed to get access token, status code: {response.status_code}")
+        return None
+
+    return response.json()
+
+
+def _get_auth_headers():
+    """Get authentication headers with token obtained once"""
+    global _AUTH_HEADERS
+
+    if _AUTH_HEADERS is None:
+        LOGGER.debug("Obtaining fresh token...")
+        token_data = _refresh_token()
+        if token_data and "access_token" in token_data:
+            access_token = token_data["access_token"]
+            LOGGER.info(f"Token obtained successfully, access_token: {access_token}")
+            _AUTH_HEADERS = {
+                "Authorization": f"Bearer {access_token}",
+                "X-Authorization": f"Bearer {access_token}",
+            }
+        else:
+            LOGGER.error(
+                f"Failed to refresh token, using fallback token: {FALLBACK_TOKEN}"
+            )
+            _AUTH_HEADERS = {
+                "Authorization": f"Bearer {FALLBACK_TOKEN}",
+                "X-Authorization": f"Bearer {FALLBACK_TOKEN}",
+            }
+
+    return _AUTH_HEADERS
 
 
 def _build_tenda_api_url(category_id: int, page: int = 1) -> str:
@@ -51,7 +116,7 @@ def _get_all_categories():
 
     response = make_request_with_delay(
         URL_CATEGORIES,
-        headers=HEADERS,
+        headers=_get_auth_headers(),
     )
 
     response_json = response.json()
@@ -78,7 +143,7 @@ def _process_additional_pages(
 
         _log_progress(page, number_of_pages, category_name, page, category_url)
 
-        response = make_request_with_delay(category_url, headers=HEADERS)
+        response = make_request_with_delay(category_url, headers=_get_auth_headers())
 
         if response is None or response.status_code != 200:
             LOGGER.info(
@@ -98,7 +163,7 @@ def get_all_products_for_category(category_id: int, category_name: str):
     LOGGER.debug(f"Getting all products for category {category_name} ({category_url})")
 
     # Get products from the first page
-    response = make_request_with_delay(category_url, headers=HEADERS)
+    response = make_request_with_delay(category_url, headers=_get_auth_headers())
     response_json = response.json()
 
     number_of_pages = response_json.get("total_pages")

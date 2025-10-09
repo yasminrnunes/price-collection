@@ -1,8 +1,7 @@
-import requests
-import random
-import time
 import socket
-import brotli
+import time
+import random
+import requests
 from playwright.sync_api import sync_playwright
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -57,6 +56,13 @@ def _make_request(url, headers=None, timeout=30, raise_error: bool = False):
         response = _SESSION.get(url, headers=merged_headers, timeout=timeout)
         response.raise_for_status()
 
+        # Ensure proper encoding for text content
+        if response.encoding is None or response.encoding.lower() in [
+            "iso-8859-1",
+            "windows-1252",
+        ]:
+            response.encoding = "utf-8"
+
         # content_encoding = response.headers.get('content-encoding', '').lower()
         # if content_encoding == 'br':
         #     try:
@@ -83,6 +89,47 @@ def make_request_with_delay(
         _random_delay(url=url)
 
     return _make_request(url, headers, timeout, raise_error)
+
+
+def make_post_request(url, data=None, headers=None, timeout=30):
+    """
+    Make a simple POST request.
+
+    Args:
+        url: URL to make the POST request to
+        data: Data to send in the POST body (dict or str)
+        headers: Optional headers to include
+        timeout: Request timeout in seconds
+
+    Returns:
+        requests.Response object or None if error
+    """
+    global _SESSION
+    # merge default headers with provided headers
+    merged_headers = {**DEFAULT_HEADERS, **(headers or {})}
+
+    try:
+        response = _SESSION.post(
+            url, data=data, headers=merged_headers, timeout=timeout
+        )
+        response.raise_for_status()
+
+        # Ensure proper encoding for text content
+        if response.encoding is None or response.encoding.lower() in [
+            "iso-8859-1",
+            "windows-1252",
+        ]:
+            response.encoding = "utf-8"
+
+        return response
+
+    except (requests.exceptions.RequestException, socket.gaierror) as e:
+        print(f"Error making POST request to {url}: {e}")
+        if isinstance(e, socket.gaierror):
+            print("DNS resolution error — recreating session")
+            _SESSION.close()
+            _SESSION = create_session()
+        return None
 
 
 def make_dinamic_request_with_delay(

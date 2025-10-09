@@ -1,7 +1,10 @@
+"""
+Model for product discounts
+"""
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
-from decimal import Decimal
 from enum import Enum
 
 
