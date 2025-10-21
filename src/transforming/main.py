@@ -1,10 +1,11 @@
 from sql_client import create_query_client
 from logger import Logger
-from utils import normalize_word
+from utils import normalize_word, generate_variants, check_brand_exists, check_brand_in_product, check_product_exists, normalize_unit
+from collections import Counter
 
-
-LOGGER = Logger("query_examples")
+LOGGER = Logger("transforming")
 client = create_query_client("custom_queries")
+LOGGER.debug("Starting the transforming process")
 
 # Checking the supermarkets in the supermarkets table
 supermarkets_created_query = """
@@ -41,6 +42,7 @@ products_created_query = """
     """
 products_created_raw = client.execute_query(products_created_query)
 products_created = {row["normalized_name"]: row["id"] for row in products_created_raw}
+products_created_split = [Counter(product.split()) for product in products_created]
 
 # Checking the prices registered in the price table
 price_created_query = """
@@ -56,12 +58,16 @@ price_created = {(row["id_supermarket"], row["id_product"], row["extraction_date
 scraped_products_query = """
         SELECT p.*
         FROM stage_scraping_products p
-        WHERE p.market = 'tenda'
+        WHERE --UPPER(p.name) like '%COCA COLA%'
+        p.market = 'stMarche'
+        --AND  p.brand = 'Piracanjuba' --
         --AND length(p.id::text) > 5
         AND p.is_processed = false
-        --AND p.id = 619600713277767680
-        ORDER BY p.source_id DESC
-        LIMIT 100;
+        --AND p.id = 625030582052585478
+        --AND upper(name) like '%CERVEJA % CORONA%'
+        AND p.extraction_date = '2025-10-04 17:58:02.962398';
+        --ORDER BY p.source_id DESC
+        --LIMIT 10;
         """
 scraped_products=client.execute_query(scraped_products_query)
 
@@ -80,12 +86,14 @@ scraped_discounts_query = """
         """
 scraped_discounts=client.execute_query(scraped_discounts_query)
 
+count_products = 0
+total_products = len(scraped_products)
 
 for scraped_product in scraped_products:
-    print(scraped_product)
+    LOGGER.debug(f"INITIALIZING THE TRANSFORMING PROCESS FOR PRODUCT: {scraped_product['id']}")
     _id = scraped_product["id"]
     name = scraped_product["name"]
-    normalized_name = normalize_word(scraped_product["name"])
+    normalized_name = normalize_unit(scraped_product["name"])
     market = normalize_word(scraped_product["market"])
     category = scraped_product["category"]
     brand = scraped_product["brand"]
@@ -103,7 +111,7 @@ for scraped_product in scraped_products:
 ## Product
     # Checking if the product_url is in the raw_product_data table
     if product_url not in raw_product_data:
-        print(f"Product_url {product_url} not found in the raw_product_data table.")
+        LOGGER.debug(f"Product_url {product_url} not found in the raw_product_data table.")
 
     ## Supermarket   
         # Checking if the supermarket is in the supermarkets table
@@ -119,31 +127,64 @@ for scraped_product in scraped_products:
 
             # Add to local dictionary to avoid re-insertion
             supermarkets_created[market] = id_supermarket
-            print(f"Inserted supermarket {market} with id {id_supermarket}.")
+            LOGGER.debug(f"Inserted supermarket {market} with id {id_supermarket}.")
         else:
             # Get the id of the existing supermarket
             id_supermarket = supermarkets_created[market]
-            print(f"Supermarket {market} already exists with id {id_supermarket}.")
+            LOGGER.debug(f"Supermarket {market} already exists with id {id_supermarket}.")
 
     ## Brand
-        # Checking if the brand is in the brands table
-        if normalized_brand not in brands_created:
-            # Inserting the brand in the brands table
-            brand_query = """
-                INSERT INTO brands (name, normalized_name)
-                VALUES (%s, %s)
-                RETURNING id;
-                """
-            new_brand = client.execute_non_query(brand_query, (brand, normalized_brand))
-            id_brand = new_brand[0]["id"]
-
-            # Add to local dictionary to avoid re-insertion
-            brands_created[normalized_brand] = id_brand
-            print(f"Inserted brand {brand} with id {id_brand}.")
-        else:
-            # Get the id of the existing brand
-            id_brand = brands_created[normalized_brand]
-            print(f"Brand {brand} already exists with id {id_brand}.")
+        if brand is None: # Brand is not informed in the scraping
+            LOGGER.debug(f"No brand available in the scraping process.")
+            # Compare if one of the brands available in brand_created is in the product name
+            match_brand = check_brand_in_product(brands_created, normalized_name)
+            if match_brand: # if the brand is in the product name
+                id_brand = brands_created[match_brand]
+                LOGGER.debug(f"Brand {match_brand} was found in the product name")
+            elif "st marche" in normalized_name: 
+                brand = "st marche"
+                normalized_brand = "st marche"
+                if normalized_brand not in brands_created:
+                    brand_query = """
+                        INSERT INTO brands (name, normalized_name)
+                        VALUES (%s, %s)
+                        RETURNING id;
+                        """
+                    new_brand = client.execute_non_query(brand_query, (brand, normalized_brand))
+                    id_brand = new_brand[0]["id"]
+                    brands_created[normalized_brand] = id_brand
+                    LOGGER.debug(f"Inserted brand {brand} with id {id_brand}.")
+                else:
+                    id_brand = brands_created[normalized_brand]
+                    LOGGER.debug(f"Brand {brand} already exists with id {id_brand}.")
+            else: #the brand is not in the product name          
+                LOGGER.debug(f"No brand available in the product {normalized_name}.")
+                id_brand = None
+                # Don't insert a brand in the brands table
+        else: # Brand is informed in the scraping
+            if normalized_brand in brands_created: # If the brand is in the brands table
+                id_brand = brands_created[normalized_brand]
+                LOGGER.debug(f"Brand {brand} already exists with id {id_brand}.")
+            
+            else: # The brand is not available in the normalized_brand in brands table
+                match_brand,brand_name_matched = check_brand_exists(normalized_brand, brands_created)
+                # Checking if the brand exists in the brands table
+                if match_brand == 1:
+                    # Get the id of the existing brand
+                    id_brand = brands_created[brand_name_matched]
+                    LOGGER.debug(f"Brand {brand} already exists with id {id_brand}.")
+                else:
+                    # Inserting the brand in the brands table
+                    brand_query = """
+                        INSERT INTO brands (name, normalized_name)
+                        VALUES (%s, %s)
+                        RETURNING id;
+                        """
+                    new_brand = client.execute_non_query(brand_query, (brand, normalized_brand))
+                    id_brand = new_brand[0]["id"]
+                    # Add to local dictionary to avoid re-insertion
+                    brands_created[normalized_brand] = id_brand
+                    LOGGER.debug(f"Inserted brand {brand} with id {id_brand}.")
 
     ## Unit of measurement
         # Checking if the unit of measurement is in the units_of_measure table PENDING
@@ -152,25 +193,31 @@ for scraped_product in scraped_products:
     
         # Checking if the product is already in the products table
         if normalized_name not in products_created:
-            # Inserting the product in the products table
-            product_query = """
-                INSERT INTO products (name, normalized_name, quantity, id_brand)
-                VALUES (%s, %s, %s, %s)
-                RETURNING id;
-                """
-            new_product = client.execute_non_query(product_query, (name, normalized_name, quantity, id_brand))
-            id_product = new_product[0]["id"]
+            # Apply the check_product_exists function
+            match_product, product_name_matched = check_product_exists(normalized_name, list(products_created.keys()), products_created_split)
+            if match_product == 1:
+                id_product = products_created[product_name_matched]
+                LOGGER.debug(f"Product {name} already exists with similar name {product_name_matched} and id {id_product}.")
+            else:
+                # Inserting the product in the products table
+                product_query = """
+                    INSERT INTO products (name, normalized_name, quantity, id_brand)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id;
+                    """
+                new_product = client.execute_non_query(product_query, (name, normalized_name, quantity, id_brand))
+                id_product = new_product[0]["id"]
 
-            # Add to local dictionary to avoid re-insertion
-            products_created[normalized_name] = id_product
-            print(f"Inserted product {name} with id {id_product}.")
+                # Add to local dictionary to avoid re-insertion
+                products_created[normalized_name] = id_product
+                LOGGER.debug(f"Inserted product {name} with id {id_product}.")
         
         else:
             # Get the id of the existing product
             id_product = products_created[normalized_name]
-            print(f"Product {name} already exists with id {id_product}.")
+            LOGGER.debug(f"Product {name} already exists with id {id_product}.")
     
-                
+ ## Raw Product Data               
         # Inserting the product_url in the raw_product_data table
         raw_product_data_query = """
                     INSERT INTO raw_product_data (original_name, product_url, product_id, extraction_date, market)
@@ -179,17 +226,19 @@ for scraped_product in scraped_products:
         client.execute_non_query(raw_product_data_query, (name, product_url, id_product, extraction_date, market))
 
         # Add to local dictionary to avoid re-insertion
-        raw_product_data[product_url] = product_url
-        print(f"Inserted product_url {product_url} with product_id {id_product}.")
+        raw_product_data[product_url] = id_product
+        LOGGER.debug(f"Inserted product_url {product_url} with product_id {id_product} in raw_product_data table.")
     
     else:
         # Get the id of the existing product_url
-        #id_product_url = raw_product_data[product_url]
-        print(f"Product_url {product_url} already exists with product id {id_product}.")
+        id_product = raw_product_data[product_url]
+        id_supermarket = supermarkets_created[market]
+        LOGGER.debug(f"Product_url {product_url} already exists with product id {id_product}.")
 
 ## Price
+    
     if (id_supermarket, id_product, extraction_date) in price_created:
-        print(f"Price {price} already exists with id_supermarket {id_supermarket}, id_product {id_product} and extraction_date {extraction_date}.")
+        LOGGER.debug(f"Price {price} already exists with id_supermarket {id_supermarket}, id_product {id_product} and extraction_date {extraction_date}.")
         # Products in distinct categories at the same supermarket and extraction date
     else:
         # Defining the currency
@@ -203,18 +252,27 @@ for scraped_product in scraped_products:
             RETURNING id;
             """
         new_price=client.execute_non_query(price_query, (id_supermarket, id_product, extraction_date, price, currency))
+        
+        # # Verificar se a query foi executada com sucesso
+        # if new_price is None or len(new_price) == 0:
+        #     LOGGER.warning(f"Price already exists or failed to insert for product {id_product}, supermarket {id_supermarket}, date {extraction_date}")
+        #     # Adicionar à lista de preços criados para evitar tentativas futuras
+        #     price_created.add((id_supermarket, id_product, extraction_date))
+        #     continue
+            
         id_price = new_price[0]["id"]
 
         # Add to local dictionary to avoid re-insertion
         price_created.add((id_supermarket, id_product, extraction_date))
 
-        print(f"Inserted price {price} with id_supermarket {id_supermarket}, id_product {id_product} and extraction_date {extraction_date}.")
+        LOGGER.debug(f"Inserted price {price} with id_supermarket {id_supermarket}, id_product {id_product} and extraction_date {extraction_date}.")
 
+## Discount
         # Checking if the product has discounts to be processed
         product_discounts = [discount for discount in scraped_discounts if discount['product_id'] == _id]
 
         if product_discounts:
-            print(f"Product {name} has {len(product_discounts)} discount(s) to be processed.")
+            LOGGER.debug(f"Product {name} has {len(product_discounts)} discount(s) to be processed.")
             
             # Processing each discount found
             for discount in product_discounts:
@@ -241,9 +299,9 @@ for scraped_product in scraped_products:
                     VALUES (%s, %s, %s, %s, %s)
                     """
                 client.execute_non_query(discount_query, (id_price, unit_value, discount_type,conditions_min_quantity, multiple_qty))
-                print(f"Inserted discount {unit_value} (type: {discount_type}) for product {id_product}.")
+                LOGGER.debug(f"Inserted discount {unit_value} (type: {discount_type}) for product {id_product}.")
         else:
-            print(f"Product {name} has no discounts to be processed.")
+            LOGGER.debug(f"Product {name} has no discounts to be processed.")
 
     #Update the field is_processed in the stage_scraping_products table
     stage_scraping_products_query = """
@@ -252,5 +310,8 @@ for scraped_product in scraped_products:
         WHERE id = %s
         """
     client.execute_non_query(stage_scraping_products_query, (_id,))
-    print(f"Updated field is_processed in the stage_scraping_products table for product {_id}.")
+    LOGGER.debug(f"Updated field is_processed in the stage_scraping_products table for product {_id}.")
     
+    LOGGER.info(f"Product {name} was successfully transformed.")
+    count_products += 1
+    LOGGER.info(f"Total products transformed: {count_products} of {total_products}")

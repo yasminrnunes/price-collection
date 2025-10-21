@@ -3,7 +3,7 @@ import sys
 
 
 class Logger:
-    def __init__(self, name: str = "price_collection"):
+    def __init__(self, name: str = "transforming"):
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.INFO)
 

@@ -23,7 +23,7 @@ class DatabaseQueryClient:
         """Establece conexión con la base de datos"""
         try:
             conn = psycopg2.connect(**DB_CONFIG)
-            self.logger.debug("Database connection established")
+            #self.logger.debug("Database connection established")
             return conn
         except psycopg2.Error as error:
             self.logger.error(f"Error connecting to the database: {error}")
@@ -49,9 +49,9 @@ class DatabaseQueryClient:
             for row in cursor.fetchall():
                 results.append(dict(zip(columns, row)))
 
-            self.logger.debug(
-                f"Query executed successfully, {len(results)} rows returned"
-            )
+            # self.logger.debug(
+            #     f"Query executed successfully, {len(results)} rows returned"
+            # )
             return results
 
         except psycopg2.Error as error:
