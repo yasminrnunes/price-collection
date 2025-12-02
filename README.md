@@ -149,7 +149,6 @@ private-price-collection/
    │  │  ├─ stopwords.py             # Stopwords used in matching
    │  │  ├─ train_data.spacy         # Training data (binary)
    │  │  └─ train_data.txt           # Training text data
-   │  ├─ cleaning.py                 # Additional cleaning utilities
    │  ├─ logger.py                   # Logger for ETL
    │  ├─ main.py                     # ETL pipeline (staging → normalized tables)
    │  ├─ sql_client.py               # DB client used during transformation
@@ -160,8 +159,6 @@ private-price-collection/
       │  ├─ logger.py                # API logger
       │  ├─ main.py                  # Endpoints, in‑memory carts, CORS
       │  ├─ opt_augmecon.py          # AUGMECON optimization with PuLP
-      │  ├─ optimization.py          # Additional optimization helpers
-      │  ├─ hypotesis.py             # Prototyping experiments
       │  └─ sql_client.py            # Thread‑safe PostgreSQL client for API
       └─ frontend/                   # Vue 3 (CDN) + Tailwind UI
          ├─ index.html               # Build shopping list & send cart to API
