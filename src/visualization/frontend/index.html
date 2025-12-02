@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect" />
+    <link
+      as="style"
+      href="https://fonts.googleapis.com/css2?display=swap&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900&amp;family=Work+Sans%3Awght%40400%3B500%3B700%3B900"
+      onload="this.rel='stylesheet'"
+      rel="stylesheet"
+    />
+    <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "oklch(72.3% 0.219 149.579)",
+              "primary-selected": "rgba(76, 223, 32, 0.3)",
+              "primary-light": "rgba(76, 223, 32, 0.5)",
+              "background-light": "#f6f8f6",
+              "background-dark": "#152111",
+            },
+            fontFamily: {
+              display: ["Work Sans"],
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+      rel="stylesheet"
+    />
+    <title>Carrinho leve - lista</title>
+  </head>
+  <body class="bg-background-light font-display text-gray-800">
+    <div
+      id="app"
+      class="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden"
+    >
+      <div class="flex h-full grow flex-col">
+        <header
+          class="flex items-center justify-between whitespace-nowrap border-b border-gray-200/50 px-4 sm:px-6 md:px-10 py-3 md:py-4"
+        >
+          <div class="flex items-center gap-4 sm:gap-6 md:gap-8">
+            <div class="flex items-center gap-2 sm:gap-3 text-gray-900">
+              <div class="size-6 sm:size-8 text-primary">
+                <span class="material-symbols-outlined text-2xl sm:text-3xl"
+                  >shopping_cart</span
+                >
+              </div>
+              <h2 class="text-base sm:text-lg md:text-xl font-bold">Carrinho leve</h2>
+            </div>
+            <nav class="flex items-center gap-2 sm:gap-4 md:gap-6">
+              <a
+                class="text-xs sm:text-sm font-medium text-gray-900 bg-primary-light/20 px-2 py-1 rounded-md hover:bg-primary hover:text-white transition-colors"
+                href="#"
+                >Mi lista</a
+              >
+            </nav>
+          </div>
+        </header>
+        <main
+          class="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-0 py-10"
+        >
+          <div v-if="error" class="text-center py-8 sm:py-12 px-4">
+            <div class="text-red-500 text-4xl sm:text-6xl mb-4">
+              <span class="material-symbols-outlined text-4xl sm:text-6xl">error</span>
+            </div>
+            <h3 class="text-lg sm:text-xl font-bold text-gray-900 mb-2">
+              Error inesperado
+            </h3>
+            <p class="text-sm sm:text-base text-gray-600 mb-4">
+              Ha ocurrido un error inesperado al cargar los datos. Por favor,
+              intenta nuevamente.
+            </p>
+            <div
+              class="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-6 max-w-md mx-auto"
+            >
+              <p class="text-xs sm:text-sm text-red-700">
+                <strong>Error:</strong> {{ error }}
+              </p>
+            </div>
+            <button
+              @click="loadProducts"
+              class="inline-flex items-center justify-center rounded-lg h-10 sm:h-12 px-4 sm:px-6 bg-primary text-black text-sm sm:text-base hover:opacity-90 transition-opacity"
+            >
+              <span class="material-symbols-outlined mr-2 text-base sm:text-lg"
+                >refresh</span
+              >
+              Intentar nuevamente
+            </button>
+          </div>
+
+          <div v-else>
+            <div class="flex flex-col gap-3 sm:gap-4 mb-8 sm:mb-10">
+              <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
+                Crea tu lista de la compra
+              </h1>
+              <p class="text-sm sm:text-base text-gray-600">
+                Prepara tu lista de productos para comparar precios entre distintos supermercados y conseguir siempre el mejor precio posible. 
+                Te ayudaremos a encontrar la mejor combinación de supermercados para comprar los productos más baratos.
+                Selecciona los supermercados donde quieras comprar, añade los productos y por último, genera tu carrito para ver los precios totales por supermercado.
+              </p>
+            </div>
+            <section class="mb-8 sm:mb-10 md:mb-12">
+              <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
+                Selecciona los supermercados
+              </h2>
+              <div class="flex flex-wrap gap-3">
+                <button
+                  v-for="supermarket in supermarkets"
+                  :key="supermarket.id"
+                  @click="toggleSupermarket(supermarket.id)"
+                  :class="[
+                        'flex items-center gap-2 rounded-full py-2 px-4 transition-colors hover:ring-2 hover:ring-primary hover:ring-offset-2',
+                        selectedSupermarkets.includes(supermarket.id)
+                          ? 'bg-primary-selected'
+                          : 'bg-gray-200'
+                      ]"
+                >
+                  <span
+                    :class="[
+                          'font-medium text-sm',
+                          selectedSupermarkets.includes(supermarket.id)
+                            ? 'text-black'
+                            : 'text-gray-800'
+                        ]"
+                    >{{ supermarket.name }}</span
+                  >
+                </button>
+              </div>
+            </section>
+
+            <section class="mb-8 sm:mb-10 md:mb-12">
+              <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
+                Añade los productos
+              </h2>
+              <div v-if="loading" class="text-center py-6 sm:py-8">
+                <div
+                  class="inline-block animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-primary"
+                ></div>
+                <p class="mt-2 text-sm sm:text-base text-gray-500">Cargando productos...</p>
+              </div>
+              <div v-else>
+                <div
+                  v-if="selectedSupermarkets.length === 0"
+                  class="text-center py-6 sm:py-8 text-gray-500"
+                >
+                  <span class="material-symbols-outlined text-3xl sm:text-4xl mb-2 block"
+                    >store</span
+                  >
+                  <p class="text-sm sm:text-base">Primero selecciona los supermercados</p>
+                  <p class="text-xs sm:text-sm">
+                    Elige los supermercados de arriba para ver sus productos
+                  </p>
+                </div>
+                <form
+                  v-else
+                  @submit.prevent="addSelectedProduct"
+                  class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end"
+                >
+                  <div class="sm:col-span-8 relative">
+                    <label
+                      class="block text-sm sm:text-base font-medium text-gray-700 mb-1"
+                      for="product-search"
+                      >Busca un producto</label
+                    >
+                    <input
+                      v-model="productSearch"
+                      @input="onProductSearch"
+                      @focus="showSuggestions = true"
+                      @blur="hideSuggestions"
+                      id="product-search"
+                      type="text"
+                      class="form-input w-full rounded-lg border-gray-300 bg-background-light focus:border-primary focus:ring-primary h-12"
+                      placeholder="Escribe el nombre del producto..."
+                      autocomplete="off"
+                    />
+                    <!-- Suggestions dropdown -->
+                    <div
+                      v-if="showSuggestions && productSearch && filteredSuggestions.length > 0"
+                      class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                    >
+                      <div
+                        v-for="product in filteredSuggestions"
+                        :key="product.id"
+                        @mousedown="selectProduct(product)"
+                        class="px-4 py-3 hover:bg-gray-100 cursor-pointer border-b border-gray-200"
+                      >
+                        <div class="flex justify-between items-start">
+                          <span class="text-gray-900 font-medium text-sm sm:text-base"
+                            >{{ product.name }}</span
+                          >
+                        </div>
+                      </div>
+                      <!-- Total matching products info -->
+                      <div class="px-3 sm:px-4 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 text-center">
+                        <span v-if="totalMatchingProducts > filteredSuggestions.length">
+                          Mostrando {{ filteredSuggestions.length }} de {{ totalMatchingProducts }} productos
+                        </span>
+                        <span v-else>
+                          {{ totalMatchingProducts }} {{ totalMatchingProducts === 1 ? 'producto encontrado' : 'productos encontrados' }}
+                        </span>
+                      </div>
+                    </div>
+                    <!-- Message when there are no results -->
+                    <div
+                      v-if="showSuggestions && productSearch && filteredSuggestions.length === 0"
+                      class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 sm:p-4"
+                    >
+                      <p class="text-gray-500 text-center text-sm sm:text-base">
+                        No se encontraron productos
+                      </p>
+                    </div>
+                  </div>
+                  <div class="sm:col-span-2">
+                    <label
+                      class="block text-sm sm:text-base font-medium text-gray-700 mb-1"
+                      >Cantidad</label
+                    >
+                    <div
+                      class="flex items-center border border-gray-300 rounded-lg bg-background-light h-12"
+                    >
+                        <button
+                          type="button"
+                          @click="decreaseQuantity"
+                          :disabled="productQuantity <= 1"
+                          class="w-10 h-10 flex items-center justify-center text-gray-500 hover:ring-2 hover:ring-primary hover:text-primary hover:ring-offset-2 rounded-l-lg disabled:hover:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:ring-0"
+                        >
+                        <span class="material-symbols-outlined text-lg"
+                          >remove</span
+                        >
+                      </button>
+                      <span
+                        class="flex-1 text-center font-medium text-gray-900 min-w-[3rem]"
+                      >
+                        {{ productQuantity }}
+                      </span>
+                        <button
+                          type="button"
+                          @click="increaseQuantity"
+                          class="w-10 h-10 flex items-center justify-center text-gray-500 hover:ring-2 hover:ring-primary hover:text-primary hover:ring-offset-2 rounded-r-lg disabled:hover:ring-0"
+                        >
+                        <span class="material-symbols-outlined text-lg"
+                          >add</span
+                        >
+                      </button>
+                    </div>
+                  </div>
+                  <div class="sm:col-span-2">
+                    <button
+                      type="submit"
+                      :disabled="!selectedProduct || productQuantity < 1"
+                      class="w-full flex items-center justify-center rounded-lg h-12 px-4 bg-primary-light text-black text-base hover:bg-primary transition-colors disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    >
+                      Añadir
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </section>
+            <section>
+              <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">
+                Tu lista de la compra
+              </h2>
+              <div
+                v-if="shoppingList.length === 0"
+                class="text-center py-6 sm:py-8 text-gray-500"
+              >
+                <span class="material-symbols-outlined text-3xl sm:text-4xl mb-2 block"
+                  >shopping_cart</span
+                >
+                <p class="text-sm sm:text-base">Tu lista de la compra está vacía</p>
+                <p class="text-xs sm:text-sm mb-4">
+                  Selecciona productos desde arriba para empezar
+                </p>
+                <button
+                  v-if="availableProducts.length > 0 && selectedSupermarkets.length > 0"
+                  @click="loadSampleCart"
+                  class="inline-flex items-center justify-center rounded-lg h-9 px-4 bg-gray-100 text-gray-600 text-sm hover:bg-gray-200 transition-colors"
+                >
+                  <span class="material-symbols-outlined mr-1.5 text-base"
+                    >shuffle</span
+                  >
+                  Generar carrito de la compra aleatorio
+                </button>
+              </div>
+              <div
+                v-else
+                class="overflow-hidden rounded-lg border border-gray-300"
+              >
+                <div class="overflow-x-auto">
+                  <table class="w-full min-w-[300px]">
+                    <thead class="bg-gray-100">
+                      <tr>
+                        <th
+                          class="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Producto
+                        </th>
+                        <th class="relative px-3 py-2 md:px-6 md:py-3 text-right">
+                          <button
+                            @click="clearShoppingList"
+                            class="inline-flex items-center justify-center rounded-lg h-7 md:h-8 px-2 md:px-4 bg-gray-200 text-gray-800 text-xs md:text-sm font-normal hover:bg-gray-300 transition-colors"
+                          >
+                            <span class="material-symbols-outlined md:mr-1 text-sm md:text-base"
+                              >delete</span
+                            >
+                            <span class="hidden md:inline">Vaciar carrito</span>
+                          </button>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody class="bg-background-light divide-y divide-gray-200">
+                      <tr v-for="(item, index) in shoppingList" :key="item.id">
+                        <td
+                          class="px-3 py-3 md:px-6 md:py-4 text-sm md:text-base font-medium text-gray-900"
+                        >
+                          <div class="break-words">{{ item.name }}</div>
+                        </td>
+                        <td
+                          class="px-3 py-3 md:px-6 md:py-4 whitespace-nowrap text-right text-sm font-medium"
+                        >
+                          <div class="flex items-center justify-end gap-2 md:gap-3">
+                            <div class="flex items-center gap-1.5 md:gap-2">
+                              <button
+                                @click="updateQuantity(index, item.quantity - 1)"
+                                class="w-7 h-7 md:w-6 md:h-6 rounded-full bg-gray-200 flex items-center justify-center hover:bg-primary hover:text-white transition-colors"
+                              >
+                                <span class="material-symbols-outlined text-xs md:text-sm"
+                                  >remove</span
+                                >
+                              </button>
+                              <span class="min-w-[2rem] text-center text-gray-900 text-sm md:text-base"
+                                >{{ item.quantity }}</span
+                              >
+                              <button
+                                @click="updateQuantity(index, item.quantity + 1)"
+                                class="w-7 h-7 md:w-6 md:h-6 rounded-full bg-gray-200 flex items-center justify-center hover:bg-primary hover:text-white transition-colors"
+                              >
+                                <span class="material-symbols-outlined text-xs md:text-sm"
+                                  >add</span
+                                >
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <!-- Results button -->
+              <div v-if="shoppingList.length > 0" class="mt-4 sm:mt-6 text-right">
+                <button
+                  @click="sendCartToAPI"
+                  :disabled="loadingCart"
+                  class="w-full sm:w-auto inline-flex items-center justify-center rounded-lg h-10 sm:h-12 px-6 sm:px-8 bg-primary-light text-black text-sm sm:text-base hover:bg-primary transition-colors disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                >
+                  <span
+                    v-if="loadingCart"
+                    class="inline-block animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-black mr-2"
+                  ></span>
+                  {{ loadingCart ? 'Enviando...' : 'Ver resultados' }}
+                  <span class="material-symbols-outlined ml-2 text-base sm:text-lg"
+                    >arrow_forward</span
+                  >
+                </button>
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      const { createApp } = Vue;
+
+      createApp({
+        data() {
+          return {
+            // Reactive data for the application
+            selectedSupermarkets: [], // IDs of selected supermarkets
+            selectedProduct: "", // Selected product
+            productSearch: "", // Search text
+            showSuggestions: false, // Show suggestions
+            productQuantity: 1, // Product quantity
+            availableProducts: [], // Products loaded from endpoint
+            allProducts: [], // Complete list of products (to preserve when deselecting)
+            shoppingList: [], // User's shopping list
+            supermarkets: [], // Supermarkets loaded from endpoint
+            loading: true,
+            loadingCart: false, // Loading state for cart submission
+            error: null, // Error state to show no connection message
+          };
+        },
+        mounted() {
+          // Load products from endpoint
+          this.loadProducts();
+        },
+        computed: {
+          // Filter products by selected supermarkets
+          filteredProducts() {
+            // If no supermarkets are selected, don't show any products
+            if (
+              !this.selectedSupermarkets ||
+              this.selectedSupermarkets.length === 0
+            ) {
+              return [];
+            }
+
+            // Filter products that are available in at least one of the selected supermarkets
+            const filtered = this.availableProducts.filter((product) => {
+              if (
+                !product.supermarkets ||
+                !Array.isArray(product.supermarkets)
+              ) {
+                return false;
+              }
+              return product.supermarkets.some((supermarketId) =>
+                this.selectedSupermarkets.includes(supermarketId)
+              );
+            });
+
+            return filtered;
+          },
+          // Filter suggestions based on search
+          filteredSuggestions() {
+            if (!this.productSearch) {
+              return []; // Don't show suggestions when there's no text
+            }
+
+            // Normalize search term deleting accents and special characters
+            const searchTerm = this.productSearch
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")      // Remove accents
+              .replace(/[^a-z0-9\s]/gi, "")         // Remove special characters, preserving spaces
+              .trim();
+
+            // Split search term into individual words
+            const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
+            
+            if (searchWords.length === 0) {
+              return [];
+            }
+            
+            return this.filteredProducts
+              .filter((product) => {
+                const productNormalizedName = product.normalized_name.toLowerCase();
+                // Check if all search words are present in the product name (order doesn't matter)
+                return searchWords.every(word => productNormalizedName.includes(word));
+              })
+              .slice(0, 10); // Limit to 10 results
+          },
+          // Calculate total matching products (without limit)
+          totalMatchingProducts() {
+            if (!this.productSearch) {
+              return 0;
+            }
+
+            // Normalize search term deleting accents and special characters
+            const searchTerm = this.productSearch
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")      // Remove accents
+              .replace(/[^a-z0-9\s]/gi, "")         // Remove special characters, preserving spaces
+              .trim();
+
+            // Split search term into individual words
+            const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
+            
+            if (searchWords.length === 0) {
+              return 0;
+            }
+            
+            return this.filteredProducts.filter((product) => {
+              const productNormalizedName = product.normalized_name.toLowerCase();
+              // Check if all search words are present in the product name (order doesn't matter)
+              return searchWords.every(word => productNormalizedName.includes(word));
+            }).length;
+          },
+        },
+        watch: {
+          // Clear selected product when supermarkets change
+          selectedSupermarkets() {
+            this.selectedProduct = "";
+            this.productSearch = "";
+          },
+        },
+        methods: {
+          // Load products from endpoint
+          async loadProducts() {
+            this.loading = true;
+            this.error = null;
+            try {
+              const response = await fetch("http://127.0.0.1:5001/products");
+              if (!response.ok) {
+                throw new Error(
+                  `Error ${response.status}: ${response.statusText}`
+                );
+              }
+              const data = await response.json();
+
+              // Load supermarkets
+              this.supermarkets = data.supermarkets || [];
+
+              // Load products
+              this.allProducts = data.products || [];
+              this.availableProducts = [...this.allProducts];
+
+              // Select all supermarkets by default
+              this.selectedSupermarkets = this.supermarkets.map((s) => s.id);
+            } catch (error) {
+              console.error("Error loading products:", error);
+              this.error = error.message;
+              this.loading = false;
+              return;
+            }
+
+            // Update available products based on selected supermarkets
+            this.updateAvailableProducts();
+            this.loading = false;
+          },
+          // Handle product search
+          onProductSearch() {
+            this.showSuggestions = true;
+            // If there's an exact match, select it automatically
+            const exactMatch = this.filteredProducts.find(
+              (product) =>
+                product.name.toLowerCase() === this.productSearch.toLowerCase()
+            );
+            if (exactMatch) {
+              this.selectedProduct = exactMatch;
+            } else {
+              this.selectedProduct = "";
+            }
+          },
+          // Select product from suggestions
+          selectProduct(product) {
+            this.selectedProduct = product;
+            this.productSearch = product.name;
+            this.showSuggestions = false;
+          },
+          // Hide suggestions
+          hideSuggestions() {
+            // Delay to allow clicking on suggestions
+            setTimeout(() => {
+              this.showSuggestions = false;
+            }, 200);
+          },
+          // Add selected product to shopping list
+          addSelectedProduct() {
+            if (this.selectedProduct && this.productQuantity > 0) {
+              const existingItem = this.shoppingList.find(
+                (item) => item.id === this.selectedProduct.id
+              );
+              if (existingItem) {
+                existingItem.quantity += this.productQuantity;
+              } else {
+                this.shoppingList.push({
+                  ...this.selectedProduct,
+                  quantity: this.productQuantity,
+                });
+              }
+              // Clear form
+              this.selectedProduct = "";
+              this.productSearch = "";
+              this.productQuantity = 1;
+              this.showSuggestions = false;
+            }
+          },
+          // Update product quantity
+          updateQuantity(index, newQuantity) {
+            if (newQuantity <= 0) {
+              this.shoppingList.splice(index, 1);
+            } else {
+              this.shoppingList[index].quantity = newQuantity;
+            }
+          },
+          // Clear shopping list
+          clearShoppingList() {
+            this.shoppingList = [];
+          },
+          // Toggle supermarket selection
+          toggleSupermarket(supermarketId) {
+            const index = this.selectedSupermarkets.indexOf(supermarketId);
+            if (index > -1) {
+              this.selectedSupermarkets.splice(index, 1);
+            } else {
+              this.selectedSupermarkets.push(supermarketId);
+            }
+
+            // Update available products list based on selected supermarkets
+            this.updateAvailableProducts();
+          },
+
+          // Update available products based on selected supermarkets
+          updateAvailableProducts() {
+            if (this.selectedSupermarkets.length === 0) {
+              this.availableProducts = [];
+            } else {
+              // Filter products that are available in at least one of the selected supermarkets
+              this.availableProducts = this.allProducts.filter((product) => {
+                if (
+                  !product.supermarkets ||
+                  !Array.isArray(product.supermarkets)
+                ) {
+                  return false;
+                }
+                return product.supermarkets.some((supermarketId) =>
+                  this.selectedSupermarkets.includes(supermarketId)
+                );
+              });
+            }
+          },
+          // Increase quantity
+          increaseQuantity() {
+            this.productQuantity += 1;
+          },
+          // Decrease quantity
+          decreaseQuantity() {
+            if (this.productQuantity > 1) {
+              this.productQuantity -= 1;
+            }
+          },
+
+          // Send cart to API
+          async sendCartToAPI() {
+            this.loadingCart = true;
+
+            try {
+              // Prepare cart data
+              const cartData = {
+                selectedSupermarkets: this.selectedSupermarkets,
+                products: this.shoppingList.map((item) => ({
+                  id: item.id,
+                  quantity: item.quantity,
+                })),
+              };
+
+              console.log("Sending cart:", cartData);
+
+              // Send POST to API
+              const response = await fetch("http://127.0.0.1:5001/carts", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(cartData),
+              });
+
+              if (!response.ok) {
+                throw new Error(
+                  `Error ${response.status}: ${response.statusText}`
+                );
+              }
+
+              const result = await response.json();
+              window.location.href = `results.html?cart-id=${result.id}`;
+            } catch (error) {
+              console.error("Error sending cart:", error);
+              // Navigate to error page
+              window.location.href = "error.html?code=500";
+            } finally {
+              this.loadingCart = false;
+            }
+          },
+          // Load sample cart with products available in all selected supermarkets
+          loadSampleCart() {
+            // Check if there are selected supermarkets
+            if (!this.selectedSupermarkets || this.selectedSupermarkets.length === 0) {
+              return;
+            }
+            
+            if (this.availableProducts.length === 0) return;
+            
+            // Filter products that are available in ALL selected supermarkets
+            const productsInAllSelectedSupermarkets = this.availableProducts.filter(
+              (product) => {
+                if (!product.supermarkets || !Array.isArray(product.supermarkets)) {
+                  return false;
+                }
+                // Check if product is available in all selected supermarkets
+                return this.selectedSupermarkets.every((supermarketId) =>
+                  product.supermarkets.includes(supermarketId)
+                );
+              }
+            );
+            
+            if (productsInAllSelectedSupermarkets.length === 0) return;
+            
+            // Shuffle array to randomize selection
+            const shuffled = [...productsInAllSelectedSupermarkets].sort(() => Math.random() - 0.5);
+            
+            // Take up to 10 random products
+            const selectedProducts = shuffled.slice(0, 10);
+            
+            // Add products to cart with random quantities between 1 and 5
+            selectedProducts.forEach((product) => {
+              const quantity = Math.floor(Math.random() * 5) + 1; // Random between 1 and 5
+              const existingItem = this.shoppingList.find(
+                (item) => item.id === product.id
+              );
+              
+              if (existingItem) {
+                existingItem.quantity += quantity;
+              } else {
+                this.shoppingList.push({
+                  ...product,
+                  quantity: quantity,
+                });
+              }
+            });
+            
+            // Scroll to bottom after adding products
+            this.$nextTick(() => {
+              window.scrollTo({
+                top: document.documentElement.scrollHeight,
+                behavior: 'smooth'
+              });
+            });
+          },
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>

@@ -1,8 +1,8 @@
-"""Logging utilities for the scraping system.
+"""Logging utilities for the visualization backend.
 
 This module provides a Logger class that wraps Python's standard logging
 module with a simplified interface. It configures console logging with
-a standardized format suitable for scraping operations.
+a standardized format suitable for backend API operations.
 
 Features:
     - Simplified logging interface with info, warning, error, and debug methods
@@ -12,14 +12,14 @@ Features:
 
 The Logger class automatically configures handlers only once per logger name,
 preventing duplicate log messages. Each logger instance is identified by a
-name (typically the market or module name) for better log organization.
+name for better log organization.
 
 Example:
-    Create a logger for a specific market:
-        >>> from utils.logger import Logger
-        >>> logger = Logger("extra")
-        >>> logger.info("Starting scraping process")
-        2025-10-26 18:24:39 - extra - INFO - Starting scraping process
+    Create a logger for a specific component:
+        >>> from logger import Logger
+        >>> logger = Logger("visualization_backend")
+        >>> logger.info("Starting API server")
+        2025-10-26 18:24:39 - visualization_backend - INFO - Starting API server
 
     Use different log levels:
         >>> logger.debug("Debug information")
@@ -48,12 +48,12 @@ class Logger:
 
     Example:
         Create a logger for a specific component:
-            >>> logger = Logger("market_extra")
-            >>> logger.info("Processing products")
-            >>> logger.error("Failed to fetch data")
+            >>> logger = Logger("api_server")
+            >>> logger.info("Processing request")
+            >>> logger.error("Failed to connect to database")
 
         Use the global logger instance:
-            >>> from utils.logger import logger
+            >>> from logger import logger
             >>> logger.info("Global message")
     """
 
@@ -63,8 +63,8 @@ class Logger:
         Args:
             name: The name identifier for this logger. This appears in log
                 messages and helps organize logs by component. Common names
-                include market identifiers (e.g., "extra", "tenda") or
-                module names. Defaults to "price_collection".
+                include module identifiers (e.g., "visualization_backend",
+                "api_server") or component names. Defaults to "price_collection".
         """
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.INFO)
@@ -94,7 +94,7 @@ class Logger:
             message: The message string to log.
 
         Example:
-            >>> logger.info("Successfully processed 100 products")
+            >>> logger.info("Successfully processed cart optimization")
         """
         self.logger.info(message)
 
@@ -108,7 +108,7 @@ class Logger:
             message: The warning message string to log.
 
         Example:
-            >>> logger.warning("Rate limit approaching, slowing down requests")
+            >>> logger.warning("Cart optimization took longer than expected")
         """
         self.logger.warning(message)
 
@@ -139,7 +139,7 @@ class Logger:
             message: The debug message string to log.
 
         Example:
-            >>> logger.debug("Parsing product data: {...}")
+            >>> logger.debug("Processing cart data: {...}")
 
         Note:
             To enable debug messages, set the logger level to DEBUG:

@@ -1,4 +1,4 @@
-"""PostgreSQL database client for the transforming module.
+"""PostgreSQL database client for the visualization backend.
 
 This module provides a DatabaseClient class for managing PostgreSQL database
 connections with connection pooling, automatic retry logic, and connection
@@ -11,7 +11,6 @@ Features:
     - Connection timeout management (5 minutes idle timeout)
     - Automatic retry logic for failed connections
     - Query execution with automatic result formatting (list of dicts)
-    - Support for both SELECT queries and INSERT/UPDATE/DELETE operations
     - Keepalive parameters for Railway/cloud deployments
     - Context manager support for safe connection handling
 
@@ -30,22 +29,16 @@ Example:
         >>> with db.get_db_connection() as conn:
         ...     cursor = conn.cursor()
         ...     cursor.execute("SELECT 1")
-
-    Execute non-query operations:
-        >>> db.execute_non_query(
-        ...     "INSERT INTO products (name) VALUES (%s)",
-        ...     ("Product Name",)
-        ... )
 """
 
 import os
-from typing import List, Dict, Any, Optional
-from contextlib import contextmanager
+import psycopg2
 import threading
 import time
-import psycopg2
+from contextlib import contextmanager
 from dotenv import load_dotenv
 from logger import Logger
+from typing import List, Dict, Any, Optional
 
 load_dotenv()
 
@@ -127,7 +120,7 @@ class DatabaseClient:
             if conn is None or conn.closed != 0:
                 return False
 
-            # Test the connection with a simple query
+            # Test connection with a simple query
             with conn.cursor() as cursor:
                 cursor.execute("SELECT 1")
                 cursor.fetchone()
@@ -143,8 +136,8 @@ class DatabaseClient:
         creates a new connection with retry logic.
 
         The method is thread-safe and uses a lock to ensure only one connection
-        is created at a time. It implements retry logic with delays for
-        connection failures.
+        is created at a time. It implements exponential backoff retry logic
+        for connection failures.
 
         Args:
             max_retries: Maximum number of connection retry attempts.
@@ -159,7 +152,7 @@ class DatabaseClient:
         with self._connection_lock:
             current_time = time.time()
 
-            # Check if the current connection is still valid and recent
+            # Check if current connection is still valid and recent
             if (
                 self._connection
                 and self._is_connection_valid(self._connection)
@@ -177,7 +170,7 @@ class DatabaseClient:
                     pass
                 self._connection = None
 
-            # Try to create a new connection
+            # Try to create new connection
             for attempt in range(max_retries + 1):
                 try:
                     self._connection = psycopg2.connect(**DB_CONFIG)
@@ -212,7 +205,6 @@ class DatabaseClient:
 
         This method provides a context manager interface for database connections,
         ensuring proper error handling and transaction rollback on exceptions.
-        Connections are reused rather than closed after use for efficiency.
 
         Usage:
             >>> with db.get_db_connection() as conn:
@@ -227,11 +219,6 @@ class DatabaseClient:
             ConnectionError: If a database connection could not be established.
             Exception: Any exception that occurs during connection or query
                 execution. The transaction will be rolled back automatically.
-
-        Note:
-            Connections are reused rather than closed after the context exits
-            to improve performance. The connection will be closed automatically
-            after the timeout period or when a new connection is needed.
         """
         conn = None
         try:
@@ -246,70 +233,6 @@ class DatabaseClient:
                 except:
                     pass
             raise error
-        # Note: We don't close the connection here, it is reused
-
-    def test_connection(self):
-        """Test the database connection and log PostgreSQL version.
-
-        This method performs a simple connection test by executing a SELECT
-        query to retrieve the PostgreSQL version. It's useful for verifying
-        that the database is accessible and the connection is working.
-
-        Returns:
-            bool: True if connection test succeeds, False otherwise.
-
-        Example:
-            >>> db = DatabaseClient()
-            >>> if db.test_connection():
-            ...     print("Database is accessible")
-        """
-        try:
-            with self.get_db_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("SELECT version()")
-                    version = cursor.fetchone()
-                    self.logger.info(
-                        f"Database connection successful. Version: {version[0]}"
-                    )
-                    return True
-        except Exception as error:
-            self.logger.error(f"Database connection test failed: {error}")
-            return False
-
-    def close_connection(self):
-        """Close the database connection and clean up resources.
-
-        This method closes the current database connection (if it exists)
-        in a thread-safe manner. It handles errors during connection closure
-        gracefully and ensures the connection reference is cleared.
-
-        The method is automatically called by the destructor when the
-        DatabaseClient instance is garbage collected.
-
-        Example:
-            Explicitly close connection:
-                >>> db = DatabaseClient()
-                >>> # ... use database ...
-                >>> db.close_connection()
-        """
-        with self._connection_lock:
-            if self._connection:
-                try:
-                    self._connection.close()
-                    self.logger.debug("Database connection closed")
-                except Exception as error:
-                    self.logger.error(f"Error closing database connection: {error}")
-                finally:
-                    self._connection = None
-
-    def __del__(self):
-        """Destructor that automatically closes database connection.
-
-        This method is called when the DatabaseClient instance is garbage
-        collected. It ensures that any open database connections are properly
-        closed to prevent connection leaks.
-        """
-        self.close_connection()
 
     def execute_query(
         self, query: str, params: Optional[tuple] = None
@@ -372,70 +295,37 @@ class DatabaseClient:
             self.logger.error(f"Error executing query: {error}")
             return []
 
-    def execute_non_query(
-        self, query: str, params: Optional[tuple] = None
-    ) -> Optional[List[Dict[str, Any]]]:
-        """Execute a SQL query that modifies data (INSERT, UPDATE, DELETE).
+    def close_connection(self):
+        """Close the database connection and clean up resources.
 
-        This method executes INSERT, UPDATE, DELETE, or other queries that
-        modify data. It automatically commits the transaction on success and
-        can return results if the query includes RETURNING clause.
+        This method closes the current database connection (if it exists)
+        in a thread-safe manner. It handles errors during connection closure
+        gracefully and ensures the connection reference is cleared.
 
-        The query supports parameterized queries using psycopg2's parameter
-        substitution, which helps prevent SQL injection attacks.
-
-        Args:
-            query: SQL query string to execute. Can include parameter
-                placeholders (%s) for parameterized queries. May include
-                RETURNING clause to return inserted/updated data.
-            params: Optional tuple of parameters to substitute into the query.
-                Defaults to None for queries without parameters.
-
-        Returns:
-            Optional[List[Dict[str, Any]]]: If the query includes a RETURNING
-                clause, returns a list of dictionaries with the returned rows.
-                Otherwise returns None. Returns None if the query fails or
-                no connection is available.
+        The method is automatically called by the destructor when the
+        DatabaseClient instance is garbage collected.
 
         Example:
-            Insert with RETURNING:
-                >>> result = db.execute_non_query(
-                ...     "INSERT INTO products (name) VALUES (%s) RETURNING id",
-                ...     ("New Product",)
-                ... )
-                >>> if result:
-                ...     print(f"Inserted product with ID: {result[0]['id']}")
-
-            Update query:
-                >>> db.execute_non_query(
-                ...     "UPDATE products SET name = %s WHERE id = %s",
-                ...     ("Updated Name", 123)
-                ... )
+            Explicitly close connection:
+                >>> db = DatabaseClient()
+                >>> # ... use database ...
+                >>> db.close_connection()
         """
-        try:
-            with self.get_db_connection() as conn:
-                if conn is None:
-                    return None
-
-                cursor = conn.cursor()
-                cursor.execute(query, params)
-                conn.commit()
-
-                self.logger.debug(
-                    f"Non-query executed successfully, {cursor.rowcount} rows affected"
-                )
-                # Check if query returns data (e.g., RETURNING clause)
-                if cursor.description:
-                    columns = [desc[0] for desc in cursor.description]
-                    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-                    return results
-                return None
-
-        except psycopg2.Error as error:
-            self.logger.error(f"Error executing non-query: {error}")
-            if conn:
+        with self._connection_lock:
+            if self._connection:
                 try:
-                    conn.rollback()
-                except:
-                    pass
-            return None
+                    self._connection.close()
+                    self.logger.debug("Database connection closed")
+                except Exception as error:
+                    self.logger.error(f"Error closing database connection: {error}")
+                finally:
+                    self._connection = None
+
+    def __del__(self):
+        """Destructor that automatically closes database connection.
+
+        This method is called when the DatabaseClient instance is garbage
+        collected. It ensures that any open database connections are properly
+        closed to prevent connection leaks.
+        """
+        self.close_connection()

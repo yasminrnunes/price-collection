@@ -1,17 +1,29 @@
 {
-  "name": "Biscoito CLUB SOCIAL Original Pacote 144g",
-  "price": 7.39,
-  "category":"Mercearia",
-  "unit_of_measurement":"un",
-  "quantity":1,
-  "discounts": [{
-    "type": "vuon_card",
-    "price": 5.50
-  }],
-  "brand":"Club Social",
-  "product_url": "https://marche.com.br/collections/mercearia/products/biscoito-club-social-original-pacote-144g?store_id=66677604431",
-  "extraction_url": "https://marche.com.br/collections/mercearia/products/biscoito-club-social-original-pacote-144g?store_id=66677604431",
-  "source_id": "66677604431",
-  "market":"Stmarche",
-  "extraction_date":"2025-08-06T16:22:09.645284"
+  "name": "VENTILADOR BRITANIA 220V 60W MAXX FORCE",
+  "market": "fort",
+  "price": 14990,
+  "extraction_date": "2025-09-29T06:10:43.280481",
+  "category": "Casa e Lazer",
+  "brand": "Britania",
+  "product_url": "https://www.deliveryfort.com.br/ventilador-britania-220v-60w-maxx-force/p",
+  "source_id": "2927560",
+  "quantity": 1.0,
+  "unit_of_measure": "UN",
+  "extraction_url": "https://www.deliveryfort.com.br/api/catalog_system/pub/products/search/ventilador-britania-220v-60w-maxx-force/p",
+  "id": 627846656301203456,
+  "created_at": null,
+  "discounts": [
+    {
+      "product_id": 627846656301203456,
+      "discount_type": "CARD",
+      "discounted_price": 14129,
+      "conditions_text": null,
+      "conditions_min_quantity": null,
+      "conditions_buy_quantity": null,
+      "conditions_get_quantity": null,
+      "id": null,
+      "created_at": null
+    }
+  ],
+  "currency": "BRL"
 }

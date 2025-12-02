@@ -1,3 +1,50 @@
+"""HTTP request utilities for web scraping operations.
+
+This module provides utilities for making HTTP requests with automatic retry
+logic, delay management, and support for both standard requests and dynamic
+content rendered with JavaScript using Playwright.
+
+Features:
+    - Automatic retry with exponential backoff for failed requests
+    - Random delays to avoid rate limiting and appear more human-like
+    - Session management with connection pooling and reuse
+    - Encoding detection and automatic UTF-8 conversion
+    - Support for dynamic content using Playwright (headless browser)
+    - DNS error recovery with session recreation
+
+The module maintains a global session instance that is reused across requests
+for better performance. It automatically handles retries for common HTTP
+errors (429, 500, 502, 503, 504) and recreates the session on DNS errors.
+
+Functions:
+    - make_request_with_delay: GET request with optional random delay
+    - make_post_request_with_delay: POST request with optional random delay
+    - make_post_request: Simple POST request without delay
+    - make_dinamic_request_with_delay: Dynamic request using Playwright for
+      JavaScript-rendered content
+
+Example:
+    Make a simple GET request:
+        >>> from utils.http_request import make_request_with_delay
+        >>> response = make_request_with_delay("https://example.com")
+        >>> if response:
+        ...     print(response.text)
+
+    Make a POST request with JSON data:
+        >>> response = make_post_request_with_delay(
+        ...     "https://api.example.com/endpoint",
+        ...     data='{"key": "value"}',
+        ...     headers={"Content-Type": "application/json"}
+        ... )
+
+    Make a dynamic request for JavaScript content:
+        >>> html = make_dinamic_request_with_delay(
+        ...     "https://spa.example.com",
+        ...     selector=".product-list",
+        ...     min_count=10
+        ... )
+"""
+
 import socket
 import time
 import random
@@ -21,6 +68,21 @@ DEFAULT_HEADERS = {
 
 
 def create_session():
+    """Create a requests Session with automatic retry configuration.
+
+    This function creates a new requests Session configured with retry logic
+    for handling transient HTTP errors. The retry strategy uses exponential
+    backoff and only retries on specific HTTP status codes (429, 500, 502,
+    503, 504) and network errors.
+
+    Returns:
+        A configured requests.Session object with retry adapters mounted
+        for both HTTP and HTTPS protocols.
+
+    Note:
+        The retry strategy applies only to GET requests by default. The
+        backoff factor of 0.8 results in delays of 0.8s, 1.6s, 3.2s, etc.
+    """
     session = requests.Session()
     retry = Retry(
         total=5,
@@ -42,12 +104,42 @@ _SESSION = create_session()
 
 
 def _random_delay(url: str = ""):
+    """Apply a random delay between MIN_DELAY_SECONDS and MAX_DELAY_SECONDS.
+
+    This function introduces a random delay to make requests appear more
+    human-like and avoid rate limiting. The delay is uniformly distributed
+    between the configured minimum and maximum values.
+
+    Args:
+        url: Optional URL string for logging purposes (currently unused).
+    """
     delay = random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS)
     # print(f"Waiting {delay:.2f} seconds... for {url}")
     time.sleep(delay)
 
 
 def _make_request(url, headers=None, timeout=30, raise_error: bool = False):
+    """Internal function to make a GET request with error handling.
+
+    This function performs the actual HTTP GET request using the global
+    session. It handles encoding issues, DNS errors, and request exceptions.
+    On DNS errors, it recreates the session to recover from connection issues.
+
+    Args:
+        url: The URL to make the request to.
+        headers: Optional dictionary of HTTP headers to merge with default headers.
+        timeout: Request timeout in seconds (default: 30).
+        raise_error: If True, raises exceptions instead of returning None.
+
+    Returns:
+        A requests.Response object if successful, None if an error occurred
+        and raise_error is False.
+
+    Raises:
+        requests.exceptions.RequestException: If raise_error is True and a
+            request error occurs.
+        socket.gaierror: If raise_error is True and a DNS resolution error occurs.
+    """
     global _SESSION
     # merge default headers with provided headers
     merged_headers = {**DEFAULT_HEADERS, **(headers or {})}
@@ -85,24 +177,87 @@ def _make_request(url, headers=None, timeout=30, raise_error: bool = False):
 def make_request_with_delay(
     url, headers=None, timeout=30, delay=True, raise_error: bool = False
 ):
+    """Make a GET request with optional random delay.
+
+    This is the primary function for making GET requests in scraping operations.
+    It applies an optional random delay before making the request to avoid rate
+    limiting and make requests appear more human-like.
+
+    Args:
+        url: The URL to make the request to.
+        headers: Optional dictionary of HTTP headers to merge with default headers.
+        timeout: Request timeout in seconds (default: 30).
+        delay: If True, applies a random delay before the request (default: True).
+        raise_error: If True, raises exceptions instead of returning None
+            (default: False).
+
+    Returns:
+        A requests.Response object if successful, None if an error occurred
+        and raise_error is False.
+
+    Example:
+        >>> response = make_request_with_delay("https://example.com")
+        >>> if response:
+        ...     print(response.text)
+    """
     if delay:
         _random_delay(url=url)
 
     return _make_request(url, headers, timeout, raise_error)
 
 
-def make_post_request(url, data=None, headers=None, timeout=30):
-    """
-    Make a simple POST request.
+def make_post_request_with_delay(url, data, headers=None, timeout=30, delay=True):
+    """Make a POST request with optional random delay.
+
+    This function applies an optional random delay before making a POST request.
+    It's a convenience wrapper around make_post_request that adds delay functionality.
 
     Args:
-        url: URL to make the POST request to
-        data: Data to send in the POST body (dict or str)
-        headers: Optional headers to include
-        timeout: Request timeout in seconds
+        url: The URL to make the POST request to.
+        data: Data to send in the POST body. Can be a dict, str, or bytes.
+        headers: Optional dictionary of HTTP headers to merge with default headers.
+        timeout: Request timeout in seconds (default: 30).
+        delay: If True, applies a random delay before the request (default: True).
 
     Returns:
-        requests.Response object or None if error
+        A requests.Response object if successful, None if an error occurred.
+
+    Example:
+        >>> response = make_post_request_with_delay(
+        ...     "https://api.example.com/endpoint",
+        ...     data='{"key": "value"}',
+        ...     headers={"Content-Type": "application/json"}
+        ... )
+    """
+    if delay:
+        _random_delay(url=url)
+
+    return make_post_request(url, data, headers, timeout)
+
+
+def make_post_request(url, data=None, headers=None, timeout=30):
+    """Make a POST request without delay.
+
+    This function makes a POST request using the global session. It handles
+    encoding detection and automatic UTF-8 conversion, similar to GET requests.
+    On DNS errors, it recreates the session to recover from connection issues.
+
+    Args:
+        url: The URL to make the POST request to.
+        data: Data to send in the POST body. Can be a dict, str, or bytes.
+            If a dict is provided, it will be form-encoded.
+        headers: Optional dictionary of HTTP headers to merge with default headers.
+        timeout: Request timeout in seconds (default: 30).
+
+    Returns:
+        A requests.Response object if successful, None if an error occurred.
+
+    Example:
+        >>> response = make_post_request(
+        ...     "https://api.example.com/endpoint",
+        ...     data={"key": "value"},
+        ...     headers={"Content-Type": "application/json"}
+        ... )
     """
     global _SESSION
     # merge default headers with provided headers
@@ -143,6 +298,60 @@ def make_dinamic_request_with_delay(
     min_count: int = 1,
     max_loops: int = 12,
 ):
+    """Make a dynamic request using Playwright for JavaScript-rendered content.
+
+    This function uses Playwright to render JavaScript-heavy pages and wait
+    for specific content to appear. It's useful for scraping Single Page
+    Applications (SPAs) or pages that load content dynamically.
+
+    The function:
+    - Launches a headless Chromium browser
+    - Navigates to the URL and waits for the selector to appear
+    - Optionally scrolls the page to trigger lazy-loaded content
+    - Retries up to max_retries times on failure
+    - Returns the final HTML content after all elements are loaded
+
+    Args:
+        url: The URL to navigate to.
+        selector: CSS selector for the target elements to wait for.
+        timeout: Navigation and selector wait timeout in milliseconds
+            (default: 10000).
+        delay: If True, applies a random delay before navigation (default: True).
+        raise_error: If True, raises exceptions instead of returning None
+            (default: False).
+        max_retries: Maximum number of retry attempts on failure (default: 3).
+        perform_scroll: If True, scrolls to the bottom of the page to trigger
+            lazy-loaded content (default: False).
+        min_count: Minimum number of elements matching the selector required
+            (default: 1).
+        max_loops: Maximum number of scroll/check loops to reach min_count
+            (default: 12).
+
+    Returns:
+        The HTML content of the page as a string if successful, None if an
+        error occurred and raise_error is False.
+
+    Raises:
+        RuntimeError: If the minimum count of elements is not found after
+            all retries and loops, and raise_error is True.
+        Exception: If raise_error is True and any other error occurs during
+            the request.
+
+    Example:
+        >>> html = make_dinamic_request_with_delay(
+        ...     "https://spa.example.com/products",
+        ...     selector=".product-card",
+        ...     min_count=10,
+        ...     perform_scroll=True
+        ... )
+        >>> if html:
+        ...     # Parse HTML content
+        ...     pass
+
+    Note:
+        This function is slower than standard requests because it launches
+        a full browser. Use it only when JavaScript rendering is necessary.
+    """
     last_error = None
 
     for attempt in range(1, max_retries + 1):
@@ -161,10 +370,10 @@ def make_dinamic_request_with_delay(
 
                 page.goto(url, timeout=timeout)
 
-                # Espera conteúdo alvo inicial
+                # Wait for initial target content
                 page.wait_for_selector(selector, timeout=timeout, state="attached")
 
-                # Tenta atingir a quantidade mínima de elementos
+                # Try to reach the minimum number of elements
                 def get_count() -> int:
                     try:
                         return page.locator(selector).count()
@@ -179,7 +388,7 @@ def make_dinamic_request_with_delay(
 
                     if perform_scroll:
                         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    # pequena espera entre tentativas
+                    # Small wait between attempts
                     time.sleep(0.3 + random.random() * 0.5)
 
                     current_count = get_count()
@@ -189,7 +398,7 @@ def make_dinamic_request_with_delay(
                         f"Expected at least {min_count} elements for selector, found {current_count}"
                     )
 
-                # HTML final
+                # Final HTML content
                 html_content = page.content()
 
                 browser.close()

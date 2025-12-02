@@ -1,5 +1,63 @@
-"""
-Scraping script for Fort Atacadista
+"""Scraping script for Fort Atacadista marketplace.
+
+This module provides functionality to scrape product data from Fort Atacadista
+(deliveryfort.com.br) using their sitemap and API. It uses XML sitemaps to
+discover product URLs and then queries the API for detailed product information.
+
+Stats:
+    - Products loaded:  7541
+    - Time spent:       6h 21m 48s
+
+Features:
+    - Sitemap-based product discovery
+    - Product URL collection from multiple sitemap files
+    - API-based product detail extraction
+    - Support for card discounts (Vuon 810)
+    - Batch processing with async database insertion
+    - Progress logging and error handling
+
+Workflow:
+    1. Download sitemap index XML
+    2. Filter and collect product sitemap URLs
+    3. Extract product URLs from each product sitemap
+    4. Deduplicate URLs while preserving order
+    5. Query API for each product's details
+    6. Parse and extract product data with discounts
+    7. Insert products in batches to database
+
+API Details:
+    - Base URL: https://www.deliveryfort.com.br/api/catalog_system/pub/products/search
+    - Method: GET
+    - Endpoint format: {API_URL}/{product_id}
+    - Authentication: None required (public API)
+
+Discount Types Supported:
+    - Card (Vuon 810): Card-based discounts with specific pricing
+
+Product Data Available:
+    - Product name, category, brand
+    - Price, quantity, unit of measure
+    - Product URL, source ID
+    - Card discounts if available
+
+Example:
+    Run the scraper:
+        >>> python market_fort_api.py
+
+    The script will:
+    1. Collect all product URLs from sitemaps
+    2. Process each product sequentially
+    3. Insert products in batches of 50
+    4. Save all products to JSON file
+
+Note:
+    - Products are inserted into the database in batches for better performance
+    - All prices are converted to cents (integers) using price_to_int
+    - Extraction date is set when the script starts running
+    - Products with multiple sellers log a warning but use the first seller
+
+TODO:
+    - Add the price even if the product is not available (IsAvailable field)
 """
 
 from datetime import datetime
@@ -26,6 +84,28 @@ API_URL = "https://www.deliveryfort.com.br/api/catalog_system/pub/products/searc
 
 
 def _collect_all_product_urls() -> List[str]:
+    """Collect all product URLs from Fort Atacadista sitemap files.
+
+    This function retrieves product URLs by:
+    1. Downloading the sitemap index XML
+    2. Filtering for product-specific sitemap URLs (containing "/sitemap/product-")
+    3. Downloading and parsing each product sitemap
+    4. Extracting all product URLs from each sitemap
+    5. Deduplicating URLs while preserving order
+
+    The sitemap index contains references to multiple sitemap files, each
+    containing a subset of product URLs. This function aggregates all URLs
+    from all product sitemaps.
+
+    Returns:
+        A list of unique product URLs (strings) in order of discovery.
+        Returns an empty list if the sitemap index cannot be parsed.
+
+    Note:
+        If a product sitemap fails to download or parse, an error is logged
+        but processing continues with the next sitemap. The function uses
+        XML namespaces to properly parse sitemap XML structure.
+    """
     LOGGER.info(f"Collecting product URLs via sitemap: {SITEMAP_INDEX_URL}")
 
     # Download sitemap index
@@ -72,6 +152,36 @@ def _collect_all_product_urls() -> List[str]:
 
 
 def _extract_product_data(product_url: str) -> ScrapingProduct:
+    """Extract product data from Fort Atacadista API.
+
+    This function takes a product URL, constructs the API endpoint, and
+    extracts detailed product information including price, category, brand,
+    and discounts. It handles the API response structure and converts data
+    to the ScrapingProduct model.
+
+    The API endpoint is constructed by extracting the product ID from the
+    URL (last two path segments) and appending it to the base API URL.
+
+    Args:
+        product_url: The full product URL from the sitemap
+            (e.g., "https://www.deliveryfort.com.br/product-name/p").
+
+    Returns:
+        A ScrapingProduct object with all available product information
+        and discounts, or None if:
+        - The API request fails
+        - The product is not found (empty response)
+        - An error occurs during parsing
+
+    Discount Handling:
+        - Card discounts are extracted from the "Preco Vuon 810" field
+        - If present, a card discount is added with the discounted price
+
+    Note:
+        If a product has multiple sellers, a warning is logged but the
+        function uses the first seller's data. All prices are converted
+        to cents (integers) before storage.
+    """
     try:
         product_id = "/".join(product_url.split("/")[-2:])
         product_url_api = API_URL + "/" + product_id
@@ -125,16 +235,33 @@ def _extract_product_data(product_url: str) -> ScrapingProduct:
         return None
 
 
-def _insertion_callback(success, product_count, scope):
-    if success:
-        LOGGER.debug(
-            f"Successfully inserted {product_count} products - batch '{scope}'"
-        )
-    else:
-        LOGGER.error(f"Failed to insert {product_count} products - batch '{scope}'")
+def main():
+    """Main function to run the Fort Atacadista scraper.
 
+    This function orchestrates the complete scraping process:
+    1. Collects all product URLs from sitemaps
+    2. Processes each product URL sequentially
+    3. Extracts product data via API
+    4. Groups products into batches (50 products per batch)
+    5. Inserts batches into database asynchronously
+    6. Saves all products to a JSON file
+    7. Waits for all database insertions to complete
+    8. Logs execution statistics
 
-if __name__ == "__main__":
+    Batch Processing:
+        Products are collected and inserted in batches of 50 to balance
+        performance and memory usage. Each batch is inserted asynchronously
+        to avoid blocking the main scraping process.
+
+    Progress Tracking:
+        Progress is logged for each product showing percentage complete
+        and current product URL being processed.
+
+    Note:
+        The script processes products sequentially to avoid overwhelming
+        the API. Database insertions run in parallel using threads to
+        improve overall performance.
+    """
     start_time = time.time()
     LOGGER.info(f"Starting {MARKET} scraper")
 
@@ -170,7 +297,7 @@ if __name__ == "__main__":
             if len(batch_products) >= batch_size:
                 batch_number += 1
                 thread = db_client.insert_scraping_products_with_discounts_async(
-                    batch_products, batch_number, _insertion_callback
+                    batch_products, batch_number
                 )
                 active_threads.append(thread)
                 batch_products = []  # Clear the batch
@@ -178,7 +305,7 @@ if __name__ == "__main__":
     # Insert remaining products if there are any
     if batch_products:
         thread = db_client.insert_scraping_products_with_discounts_async(
-            batch_products, batch_number, _insertion_callback
+            batch_products, batch_number
         )
         active_threads.append(thread)
 
@@ -194,3 +321,7 @@ if __name__ == "__main__":
     total_time_seconds = end_time - start_time
     total_time_minutes = total_time_seconds / 60
     LOGGER.info(f"{MARKET} scraper finished in {total_time_minutes:.2f} minutes")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,5 +1,72 @@
-"""
-Scraping script for St Marche
+"""Scraping script for St Marche marketplace.
+
+This module provides functionality to scrape product data from St Marche
+(marche.com.br) using HTML parsing. It extracts product information from
+category pages with pagination support.
+
+Stats:
+    - Products loaded:  7481
+    - Time spent:       17,27 minutes
+
+Features:
+    - HTML-based scraping using BeautifulSoup
+    - Category discovery from homepage
+    - Pagination handling with duplicate detection
+    - Support for different unit of measurements (KG, L, UN, etc.)
+    - Quantity extraction from product names
+    - Encoding handling for special characters
+    - Async database insertion
+
+Workflow:
+    1. Fetch homepage to discover categories
+    2. For each category, paginate through all pages
+    3. Extract product data from each page
+    4. Deduplicate products by URL
+    5. Parse product details (name, price, quantity, unit of measure)
+    6. Insert products asynchronously to database
+    7. Save all products to JSON file
+
+Product Data Extraction:
+    - Product name (with encoding fixes)
+    - Price (regular or weight-based)
+    - Source ID (extracted from image URL)
+    - Unit of measure (KG, L, UN, etc.)
+    - Quantity (for weight-based products)
+    - Category name
+    - Product URL
+
+Special Features:
+    - Handles weight-based pricing (price per KG/L)
+    - Extracts quantity restrictions from product names
+      (e.g., "(máx 24 unidades por cpf)")
+    - Handles encoding issues with encode_text utility
+    - Deduplicates products by URL to avoid processing same product twice
+
+Limitations:
+    - Only displays products that are available (unavailable products not shown)
+    - Product brand is not available (only in product name)
+    - Quantity restrictions in product name are detected but not stored
+
+Example:
+    Run the scraper:
+        >>> python market_marche.py
+
+    The script will:
+    1. Discover all categories from homepage
+    2. Process each category with pagination
+    3. Extract and deduplicate products
+    4. Insert products into database asynchronously
+    5. Save all products to JSON file
+
+Note:
+    - Products are inserted into the database asynchronously for better performance
+    - All prices are converted to cents (integers) using price_to_int
+    - Extraction date is set when the script starts running
+    - The store_id can be configured (default: 66677604431 for Pavao)
+
+TODO:
+    - Map max quantity restrictions from product names
+    - Brand extraction from product names (if possible)
 """
 
 import time
@@ -30,19 +97,45 @@ STORE_ID = 66677604431  # Pavao
 STORE_URL = f"?store_id={STORE_ID}"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
     "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
 }
 
 
 def _extract_max_quantity(product_name: str):
-    """
-    Extracts max quantity from product name if pattern '(máx XX <unit> por cpf)' exists.
-    Works for any unit (e.g., unidades, kg, litros).
+    """Extract maximum quantity restriction from product name.
+
+    This function extracts quantity restrictions that appear in product names
+    in the format "(máx XX <unit> por cpf)" where XX can be any number (integer
+    or decimal) and <unit> can be any text (e.g., "unidades", "kg", "litros").
+
+    The function also returns a cleaned product name with the restriction
+    pattern removed.
+
+    Args:
+        product_name: The product name that may contain a quantity restriction
+            pattern (e.g., "Cerveja Pilsen Corona Lata 350ml (máx 24 unidades por cpf)").
+
     Returns:
-        clean_name (str): Product name without the '(máx ... por cpf)' part
-        max_quantity (float or None): The extracted number, or None if not found
+        A tuple containing:
+        - clean_name (str): Product name with the restriction pattern removed
+        - max_quantity (float or None): The extracted quantity as a float,
+          or None if no restriction pattern is found
+
+    Example:
+        >>> name, qty = _extract_max_quantity(
+        ...     "Product Name (máx 10 unidades por cpf)"
+        ... )
+        >>> print(name, qty)
+        "Product Name" 10.0
+
+        >>> name, qty = _extract_max_quantity("Product Name")
+        >>> print(name, qty)
+        "Product Name" None
+
+    Note:
+        The pattern matching is case-insensitive. Commas in numbers are
+        automatically converted to dots for float conversion.
     """
     # Match any number (integer or decimal) followed by any text until "por cpf"
     match = re.search(
@@ -67,6 +160,24 @@ def _extract_max_quantity(product_name: str):
 
 
 def _get_all_categories():
+    """Retrieve all product categories from St Marche homepage.
+
+    This function fetches the St Marche homepage (with store ID parameter)
+    and extracts all category links from the category slider section. Each
+    category is represented by a name and URL.
+
+    Returns:
+        A list of dictionaries, each containing:
+        {
+            "name": str,  # Category name (with encoding fixes)
+            "url": str     # Full category URL with store_id parameter
+        }
+
+    Note:
+        The function uses BeautifulSoup to parse the HTML and finds categories
+        by looking for links within a div with class starting with "category-slider".
+        Text encoding is fixed using encode_text utility to handle special characters.
+    """
     LOGGER.info(f"Getting all categories from {BASE_URL + STORE_URL}")
 
     response = make_request_with_delay(
@@ -95,7 +206,40 @@ def _get_all_categories():
 
 
 def _extract_product_data(soup_product, category_name, category_url_with_page):
-    """Extract product data from soup_product element"""
+    """Extract product data from BeautifulSoup product element.
+
+    This function extracts detailed product information from a parsed HTML
+    product element. It handles different pricing structures (regular vs
+    weight-based), unit of measurements, and extracts source IDs from image URLs.
+
+    Product Data Extracted:
+        - Product name (with encoding fixes)
+        - Price (regular price or weight-based price)
+        - Source ID (from image URL query parameter "v=")
+        - Unit of measure (KG, L, UN, etc.)
+        - Quantity (for weight-based products like KG/L)
+        - Product URL
+
+    Price Handling:
+        - Regular products: Uses "_product-card-price-regular" class
+        - Weight-based products (KG/L): Uses "_product-card-price-measurement-weight"
+          and extracts quantity from "_product-card-measurement"
+
+    Args:
+        soup_product: BeautifulSoup element representing a product link.
+        category_name: The category name to assign to the product.
+        category_url_with_page: The category URL with page number for tracking
+            extraction source.
+
+    Returns:
+        A ScrapingProduct object with all available product information,
+        or None if critical data cannot be extracted.
+
+    Note:
+        The function uses safe_find_text helper to gracefully handle missing
+        elements. Source ID extraction from image URL may fail silently if the
+        URL structure doesn't contain "v=" parameter.
+    """
 
     def safe_find_text(class_prefix, default="", upper=False):
         """Safely find element and extract text with error handling"""
@@ -118,9 +262,6 @@ def _extract_product_data(soup_product, category_name, category_url_with_page):
     # Get product price
     price = safe_find_text("_product-card-price-regular") or 0
 
-    # Get unit of measurement
-    unit_of_measure = safe_find_text("_product-card-price-measurement", upper=True)
-
     # Get source id
     source_id = None
     try:
@@ -134,9 +275,12 @@ def _extract_product_data(soup_product, category_name, category_url_with_page):
             f"Error extracting source id from {product_name}, url: {product_url}"
         )
 
+    # Get unit of measurement
+    unit_of_measure = safe_find_text("_product-card-price-measurement", upper=True)
+
     quantity = None
 
-    # Handle non-unit measurements
+    # Handle non-unit measurements (KG, L, etc.)
     if unit_of_measure and unit_of_measure != "UN":
 
         # Override price with weight-based price
@@ -149,7 +293,7 @@ def _extract_product_data(soup_product, category_name, category_url_with_page):
         if measurement_text:
             quantity = string_to_decimal(measurement_text)
 
-    # TODO Map max quantity or do something else
+    # TODO Restrictions: Map max quantity or do something else
     # product_name, max_quantity = _extract_max_quantity(product_name)
 
     return ScrapingProduct(
@@ -168,6 +312,35 @@ def _extract_product_data(soup_product, category_name, category_url_with_page):
 
 
 def _get_all_products_for_category(category_name: str, category_url: str):
+    """Retrieve all products for a specific category with pagination.
+
+    This function handles pagination for a category by:
+    1. Starting with page 1
+    2. Fetching and parsing each page sequentially
+    3. Extracting product URLs and deduplicating them
+    4. Processing each unique product
+    5. Continuing until no products are found on a page
+
+    The function uses URL-based deduplication to ensure each product is only
+    processed once, even if it appears on multiple pages.
+
+    Args:
+        category_name: The name of the category being processed.
+        category_url: The base URL for the category (without page parameter).
+
+    Returns:
+        A list of ScrapingProduct objects for all unique products in the category
+        across all pages. Returns an empty list if the category has no products.
+
+    Pagination:
+        Pages are accessed by appending "&page={page_number}" to the category URL.
+        The loop continues until a page returns no products (empty product list).
+
+    Note:
+        Progress is logged for each page showing the number of products found
+        on that page and the running total. Debug logging is available for
+        individual product processing.
+    """
     LOGGER.info(f"Getting all products for category {category_name} ({category_url})")
 
     all_category_products = []
@@ -227,16 +400,33 @@ def _get_all_products_for_category(category_name: str, category_url: str):
     return all_category_products
 
 
-def _insertion_callback(success, product_count, name):
-    if success:
-        LOGGER.info(
-            f"Successfully inserted {product_count} products for category '{name}'"
-        )
-    else:
-        LOGGER.error(f"Failed to insert {product_count} products for category '{name}'")
+def main():
+    """Main function to run the St Marche scraper.
 
+    This function orchestrates the complete scraping process:
+    1. Discovers all categories from the homepage
+    2. Processes each category sequentially
+    3. Extracts products with pagination and deduplication
+    4. Inserts products into database asynchronously
+    5. Saves all products to a JSON file
+    6. Waits for all database insertions to complete
+    7. Logs execution statistics
 
-if __name__ == "__main__":
+    The function uses async database insertion to improve performance when
+    processing multiple categories. All products are collected in memory
+    before being saved to file.
+
+    Progress Tracking:
+        Progress is logged for each category showing:
+        - Number of products found
+        - Overall progress percentage
+        - Category index and total
+
+    Note:
+        Database insertions run in separate threads to avoid blocking the
+        main scraping process. The script processes categories sequentially
+        to avoid overwhelming the server.
+    """
     LOGGER.info(f"Starting {MARKET} scraper")
     start_time = time.time()
 
@@ -267,7 +457,7 @@ if __name__ == "__main__":
 
         if len(category_products) > 0:
             thread = db_client.insert_scraping_products_with_discounts_async(
-                category_products, category["name"], _insertion_callback
+                category_products, category["name"]
             )
             active_threads.append(thread)
             all_products.extend(category_products)
@@ -283,3 +473,7 @@ if __name__ == "__main__":
     total_time_seconds = end_time - start_time
     total_time_minutes = total_time_seconds / 60
     LOGGER.info(f"{MARKET} scraper finished in {total_time_minutes:.2f} minutes")
+
+
+if __name__ == "__main__":
+    main()

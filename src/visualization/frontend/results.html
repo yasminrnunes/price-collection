@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect" />
+    <link
+      as="style"
+      href="https://fonts.googleapis.com/css2?display=swap&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900&amp;family=Work+Sans%3Awght%40400%3B500%3B700%3B900"
+      onload="this.rel='stylesheet'"
+      rel="stylesheet"
+    />
+    <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "oklch(72.3% 0.219 149.579)",
+              "primary-selected": "rgba(76, 223, 32, 0.3)",
+              "primary-light": "rgba(76, 223, 32, 0.5)",
+              "background-light": "#f6f8f6",
+              "background-dark": "#152111",
+            },
+            fontFamily: {
+              display: ["Work Sans"],
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+      rel="stylesheet"
+    />
+    <title>Carrinho leve - resultados</title>
+  </head>
+  <body
+    class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200"
+  >
+    <div
+      id="app"
+      class="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden"
+    >
+      <div class="flex h-full grow flex-col">
+        <header
+          class="flex items-center justify-between whitespace-nowrap border-b border-gray-200/50 dark:border-gray-700/50 px-4 sm:px-6 md:px-10 py-3 md:py-4"
+        >
+          <div class="flex items-center gap-4 sm:gap-6 md:gap-8">
+            <div class="flex items-center gap-2 sm:gap-3 text-gray-900 dark:text-white">
+              <div class="size-6 sm:size-8 text-primary">
+                <span class="material-symbols-outlined text-2xl sm:text-3xl">shopping_cart</span>
+              </div>
+              <h2 class="text-base sm:text-lg md:text-xl font-bold">Carrinho leve</h2>
+            </div>
+            <nav class="flex items-center gap-2 sm:gap-4 md:gap-6">
+              <a
+                class="text-xs sm:text-sm font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded-md hover:bg-primary hover:text-white transition-colors"
+                href="index.html"
+                >Mi lista</a
+              >
+              <a
+                class="text-xs sm:text-sm font-medium text-gray-600 bg-primary-light/20 px-2 py-1 rounded-md hover:bg-primary hover:text-white transition-colors"
+                href="#"
+                >Resultados</a
+              >
+            </nav>
+          </div>
+        </header>
+        <main
+          class="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-0 py-10"
+        >
+          <!-- Loading State -->
+          <div v-if="loading" class="flex flex-col items-center justify-center py-12 sm:py-20">
+            <div class="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary mb-4"></div>
+            <p class="text-sm sm:text-base md:text-lg text-gray-600 dark:text-gray-400 text-center px-4">Cargando los datos del carrito, calculuando combinaciones...</p>
+          </div>
+
+          <!-- Error State -->
+          <div v-else-if="error" class="flex flex-col items-center justify-center py-12 sm:py-20 px-4">
+            <div class="text-red-500 text-4xl sm:text-6xl mb-4">⚠️</div>
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">Error al cargar el carrito</h2>
+            <button 
+              @click="loadCartData" 
+              class="px-4 py-2 sm:px-6 sm:py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm sm:text-base"
+            >
+              Intentar nuevamente
+            </button>
+          </div>
+
+          <!-- Main Content -->
+          <div v-else>
+            <div class="flex flex-col gap-3 sm:gap-4 mb-8 sm:mb-10 md:mb-14">
+              <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">
+                Resultados de tu lista de la compra
+              </h1>
+              <p class="text-sm sm:text-base text-gray-600 dark:text-gray-400">
+                Según tu lista, aquí puedes comparar el precio total si compras todo en un solo supermercado, así como las combinaciones más eficientes entre precio y número de supermercados que visitar.
+              </p>
+            </div>
+
+          <section class="mb-8 sm:mb-10 md:mb-14">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              Total por supermercado
+            </h2>
+            <p class="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
+              Consulta el precio total si compras todo en un solo supermercado.
+            </p>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-4">
+              <div
+                v-for="(supermarket, index) in costBySupermarket"
+                :key="supermarket.name"
+                class="flex flex-col gap-1 sm:gap-2 rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-6 border shadow-sm bg-white dark:bg-background-dark border-gray-200 dark:border-gray-700/50"
+              >
+                <p
+                  class="text-xs sm:text-sm md:text-base font-medium text-gray-700 dark:text-gray-300 truncate"
+                >
+                  {{ supermarket.name }}
+                </p>
+                <p class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
+                  R$ {{ supermarket.total }}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="mb-8 sm:mb-10 md:mb-14">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              Precio por cantidad de supermercados a visitar
+            </h2>
+            <p class="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
+              Solo se muestran las combinaciones óptimas entre menor precio total y menor número de supermercados.
+            </p>
+            <div
+              class="rounded-xl p-3 sm:p-4 md:p-6 bg-white dark:bg-background-dark border border-gray-200 dark:border-gray-700/50 shadow-sm"
+            >
+              <div v-if="chartData.length > 0" class="flex flex-col gap-2">
+                <div class="relative h-48 sm:h-56 md:h-64">
+                  <canvas ref="chartCanvas" width="400" height="200"></canvas>
+                </div>
+                <div class="flex text-xs sm:text-sm md:text-base justify-around">
+                  Número de supermercados
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="mb-16 sm:mb-32 md:mb-64">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              Lista de productos por supermercado
+            </h2>
+            <p class="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
+              Selecciona cuántos supermercados quieres visitar para ver qué productos comprarías en cada uno.
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-6">
+              <button 
+                v-for="(scenario, index) in shoppingScenarios"
+                :key="index"
+                @click="selectedScenarioId = index"
+                :class="selectedScenarioId === index ? 'border-2 shadow-sm' : 'border-2 border-gray-200 dark:border-gray-700/50'"
+                :style="selectedScenarioId === index ? 'background-color: rgba(76, 223, 32, 0.1); border-color: #4cdf20' : ''"
+                class="w-full px-4 py-4 sm:px-6 sm:py-6 rounded-xl font-bold text-base sm:text-lg transition-all duration-200 hover:shadow-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+              >
+                <div class="text-center">
+                  <div class="text-lg sm:text-xl mb-2">{{ scenario.supermarkets.length }} {{ scenario.supermarkets.length === 1 ? 'Supermercado' : 'Supermercados' }}</div>
+                  <div class="flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap">
+                    <div class="text-base sm:text-lg font-bold opacity-90 whitespace-nowrap">R$ {{ calculateScenarioTotal(scenario).toFixed(2) }}</div>
+                    <span 
+                      v-if="calculateSavingsPercentage(scenario) > 0"
+                      class="inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                    >
+                      -{{ calculateSavingsPercentage(scenario).toFixed(1) }}%
+                    </span>
+                    <span 
+                      v-else-if="calculateSavingsPercentage(scenario) < 0"
+                      class="inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                    >
+                      +{{ Math.abs(calculateSavingsPercentage(scenario)).toFixed(1) }}%
+                    </span>
+                  </div>
+                </div>
+              </button>
+            </div>
+            <div class="space-y-6">
+              <div
+                v-for="(supermarket, marketId) in productsBySupermarket"
+                :key="marketId"
+                class="rounded-xl border bg-white border-primary/50 bg-primary/5 dark:bg-primary/10 shadow-sm overflow-x-auto"
+              >
+                <table class="w-full text-[10px] sm:text-xs md:text-sm text-left min-w-[320px] sm:min-w-[400px]">
+                  <thead class="bg-primary/10 dark:bg-primary/20">
+                    <tr>
+                      <th
+                        class="px-2 py-2 sm:px-3 sm:py-3 md:px-6 md:py-4 font-semibold text-gray-800 dark:text-white text-xs sm:text-base md:text-lg"
+                        colspan="4"
+                        scope="col"
+                      >
+                        {{ supermarket.name }}
+                      </th>
+                    </tr>
+                    <tr class="bg-primary/5 dark:bg-primary/10">
+                      <th
+                        class="px-2 py-1.5 sm:px-3 sm:py-2 md:px-6 md:py-3 font-medium text-gray-700 dark:text-gray-200 text-[10px] sm:text-xs md:text-sm"
+                        scope="col"
+                      >
+                        Producto
+                      </th>
+                      <th
+                        class="px-2 py-1.5 sm:px-3 sm:py-2 md:px-6 md:py-3 font-medium text-gray-700 dark:text-gray-200 text-right text-[10px] sm:text-xs md:text-sm"
+                        scope="col"
+                      >
+                        Precio Unit.
+                      </th>
+                      <th
+                        class="px-2 py-1.5 sm:px-3 sm:py-2 md:px-6 md:py-3 font-medium text-gray-700 dark:text-gray-200 text-right text-[10px] sm:text-xs md:text-sm"
+                        scope="col"
+                      >
+                        Cant.
+                      </th>
+                      <th
+                        class="px-2 py-1.5 sm:px-3 sm:py-2 md:px-6 md:py-3 font-medium text-gray-700 dark:text-gray-200 text-right text-[10px] sm:text-xs md:text-sm"
+                        scope="col"
+                      >
+                        Total
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr 
+                      v-for="product in supermarket.products"
+                      :key="product.productId"
+                      class="border-t border-primary/20 dark:border-primary/30 text-[10px] sm:text-xs md:text-base"
+                    >
+                      <td
+                        class="px-2 py-2 sm:px-3 sm:py-3 md:px-6 md:py-4 font-medium text-gray-900 dark:text-white"
+                      >
+                        <div class="flex items-center gap-1 sm:gap-1.5 md:gap-2">
+                          <span class="break-words">{{ product.productName }}</span>
+                          <span
+                            v-if="product.discountDescription"
+                            class="hidden sm:inline-flex items-center gap-0.5 rounded-full py-1.5 px-1 sm:px-1.5 md:gap-2 md:py-2 md:px-2 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-medium text-[8px] sm:text-[9px] md:text-xs lg:text-sm transition-colors whitespace-nowrap flex-shrink-0"
+                          >
+                            {{ product.discountDescription }}
+                          </span>
+                        </div>
+                      </td>
+                      <td
+                        class="px-2 py-2 sm:px-3 sm:py-3 md:px-6 md:py-4 text-gray-700 dark:text-gray-300 text-right whitespace-nowrap"
+                      >
+                        <span
+                          :title="`Actualizado: ${formatExtractionDate(product.extractionDate)}`"
+                          class="cursor-help underline decoration-dotted decoration-gray-400 dark:decoration-gray-500"
+                        >
+                          R$ {{ product.productPrice.toFixed(2) }}
+                        </span>
+                      </td>
+                      <td
+                        class="px-2 py-2 sm:px-3 sm:py-3 md:px-6 md:py-4 text-gray-700 dark:text-gray-300 text-right whitespace-nowrap"
+                      >
+                        {{ product.productQuantity }}
+                      </td>
+                      <td
+                        class="px-2 py-2 sm:px-3 sm:py-3 md:px-6 md:py-4 text-gray-700 dark:text-gray-300 text-right whitespace-nowrap"
+                      >
+                        R$ {{ (product.productPrice * product.productQuantity).toFixed(2) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr
+                      class="border-t border-primary/20 dark:border-primary/30 font-semibold text-[10px] sm:text-xs md:text-base"
+                    >
+                      <td
+                        class="px-2 py-2 sm:px-3 sm:py-3 md:px-6 md:py-4 text-gray-800 dark:text-white"
+                        colspan="3"
+                      >
+                        Total
+                      </td>
+                      <td
+                        class="px-2 py-2 sm:px-3 sm:py-3 md:px-6 md:py-4 text-gray-800 dark:text-white text-right whitespace-nowrap"
+                      >
+                        R$ {{ supermarket.products.reduce((total, product) => total + (product.productPrice * product.productQuantity), 0).toFixed(2) }}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      const { createApp } = Vue;
+
+      createApp({
+        data() {
+          return {
+            cartId: null,
+            cartData: null,
+            loading: true,
+            error: null,
+            chartData: [],
+            costBySupermarket: [],
+            shoppingScenarios: [],
+            selectedScenarioId: 0,
+          };
+        },
+        computed: {
+          productsBySupermarket() {
+            if (!this.shoppingScenarios || this.shoppingScenarios.length === 0) return {};
+            
+            // Use the selected scenario by ID
+            const selectedScenario = this.shoppingScenarios[this.selectedScenarioId];
+            
+            if (!selectedScenario) return {};
+            
+            const grouped = {};
+            selectedScenario.supermarkets.forEach(supermarket => {
+              grouped[supermarket.supermarketId] = {
+                name: supermarket.supermarketName,
+                products: supermarket.products.map(product => ({
+                  productId: product.id,
+                  productName: product.name,
+                  productPrice: product.unitPrice / 100,
+                  productQuantity: product.quantity,
+                  marketId: supermarket.supermarketId,
+                  marketName: supermarket.supermarketName,
+                  discountDescription: product.discountDescription,
+                  extractionDate: product.extractionDate
+                }))
+              };
+            });
+            
+            return grouped;
+          },
+          chartConfig() {
+            return {
+              type: "line",
+              data: {
+                labels: this.chartData.map((d) => `${d.supermarkets}`),
+                datasets: [
+                  {
+                    label: "Precio Total",
+                    data: this.chartData.map((d) => d.total),
+                    borderColor: "#4cdf20",
+                    backgroundColor: "rgba(76, 223, 32, 0.1)",
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 8,
+                    pointHoverRadius: 10,
+                    pointBackgroundColor: "#4cdf20",
+                    pointHoverBackgroundColor: "#4cdf20",
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    display: false,
+                  },
+                  tooltip: {
+                    backgroundColor: "rgba(0, 0, 0, 0.8)",
+                    titleColor: "#fff",
+                    bodyColor: "#fff",
+                    borderColor: "#4cdf20",
+                    borderWidth: 1,
+                    callbacks: {
+                      label: function (context) {
+                        return ` Precio: R$ ${context.parsed.y.toFixed(2)}`;
+                      },
+                    },
+                  },
+                },
+                scales: {
+                  x: {
+                    grid: {
+                      color: "rgba(229, 231, 235, 0.3)",
+                      drawBorder: false,
+                    },
+                    ticks: {
+                      color: "#6b7280",
+                      font: {
+                        size: 12,
+                      },
+                    },
+                  },
+                  y: {
+                    beginAtZero: false,
+                    grid: {
+                      color: "rgba(229, 231, 235, 0.3)",
+                      drawBorder: false,
+                    },
+                    ticks: {
+                      color: "#6b7280",
+                      font: {
+                        size: 12,
+                      },
+                      callback: function (value) {
+                        return "R$ " + value.toFixed(2);
+                      },
+                    },
+                  },
+                },
+                interaction: {
+                  intersect: false,
+                  mode: "index",
+                },
+              },
+            };
+          },
+        },
+        async mounted() {
+          const urlParams = new URLSearchParams(window.location.search);
+          this.cartId = urlParams.get('cart-id')
+          
+          if (this.cartId) {
+            await this.loadCartData();
+          } else {
+            this.error = "Identificador del carrito no encontrado en la url";
+            this.loading = false;
+          }
+
+          this.createChart();
+        },
+        methods: {
+          async loadCartData() {
+            try {
+              this.loading = true;
+              this.error = null;
+              const response = await fetch(`http://127.0.0.1:5001/carts/${this.cartId}`);
+
+              if (!response.ok) {
+                if (response.status === 404) {
+                  throw new Error('Carrito no encontrado en el servidor');
+                }
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+              }
+
+              this.cartData = await response.json();
+
+              // Process cart data
+              await this.processCartData();
+
+            } catch (error) {
+              this.error = error.message;
+            } finally {
+              this.loading = false;
+            }
+          },
+          
+          async processCartData() {
+            if (!this.cartData) return;
+
+            this.costBySupermarket = this.cartData.costBySupermarket.map(supermarket => ({
+              name: supermarket.supermarketName,
+              total: (supermarket.totalCost / 100).toFixed(2)
+            }));
+            
+            // Save shoppingScenarios for selection buttons
+            this.shoppingScenarios = this.cartData.shoppingScenarios;
+            
+            // Process shoppingScenarios for the chart (fixed, doesn't depend on selection)
+            this.chartData = this.cartData.shoppingScenarios.map((scenario, index) => {
+              const totalCost = scenario.supermarkets.reduce((total, supermarket) => {
+                return total + supermarket.products.reduce((supermarketTotal, product) => {
+                  return supermarketTotal + (product.unitPrice * product.quantity);
+                }, 0);
+              }, 0);
+              
+              return {
+                supermarkets: scenario.supermarkets.length,
+                total: totalCost / 100
+              };
+            });
+            
+            if (this.shoppingScenarios.length > 0) {
+              this.selectedScenarioId = 0;
+            }
+          },
+          
+          createChart() {
+            if (this.$refs.chartCanvas) {
+              const ctx = this.$refs.chartCanvas.getContext("2d");
+              this.chart = new Chart(ctx, this.chartConfig);
+            }
+          },
+          
+          calculateScenarioTotal(scenario) {
+            const totalCost = scenario.supermarkets.reduce((total, supermarket) => {
+              return total + supermarket.products.reduce((supermarketTotal, product) => {
+                return supermarketTotal + (product.unitPrice * product.quantity);
+              }, 0);
+            }, 0);
+            
+            return totalCost / 100; // Convert from cents to reais
+          },
+          
+          // Calculate savings percentage compared to the selected scenario
+          calculateSavingsPercentage(scenario) {
+            if (!this.shoppingScenarios || this.shoppingScenarios.length === 0) return 0;
+            
+            const selectedScenario = this.shoppingScenarios[this.selectedScenarioId];
+            if (!selectedScenario) return 0;
+            
+            const selectedPrice = this.calculateScenarioTotal(selectedScenario);
+            if (selectedPrice === 0) return 0;
+            
+            const scenarioPrice = this.calculateScenarioTotal(scenario);
+            
+            // If current scenario is cheaper than selected, show savings
+            if (scenarioPrice < selectedPrice) {
+              const savings = selectedPrice - scenarioPrice;
+              const percentage = (savings / selectedPrice) * 100;
+              return percentage;
+            }
+            
+            // If current scenario is more expensive, show negative (cost increase)
+            if (scenarioPrice > selectedPrice) {
+              const increase = scenarioPrice - selectedPrice;
+              const percentage = (increase / selectedPrice) * 100;
+              return -percentage; // Negative to indicate it's more expensive
+            }
+            
+            return 0; // Same price
+          },
+          
+          formatExtractionDate(isoDate) {
+            if (!isoDate) return '-';
+            
+            try {
+              const date = new Date(isoDate);
+              // Format: DD/MM/YYYY
+              const day = String(date.getDate()).padStart(2, '0');
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const year = date.getFullYear();
+
+              return `${day}/${month}/${year}`;
+            } catch (error) {
+              return '-';
+            }
+          },
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>
